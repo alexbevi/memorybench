@@ -54,3 +54,4 @@ export type ProviderName =
   | "filesystem"
   | "rag"
   | "atlas-agent-engine-direct"
+  | "atlas-agent-engine"

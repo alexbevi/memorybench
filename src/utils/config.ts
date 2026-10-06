@@ -20,6 +20,7 @@ export const config: Config = {
 
 export function getProviderConfig(provider: string): { apiKey: string; baseUrl?: string } {
   switch (provider) {
+    case "atlas-agent-engine":
     case "atlas-agent-engine-direct":
       return { apiKey: "", baseUrl: process.env.AGENTIC_MEMORY_BASE_URL }
     case "supermemory":

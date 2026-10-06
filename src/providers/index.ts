@@ -6,7 +6,7 @@ import { ZepProvider } from "./zep"
 import { FilesystemProvider } from "./filesystem"
 import { RAGProvider } from "./rag"
 
-import { AtlasAgentEngineDirectProvider } from "./atlas-agent-engine"
+import { AtlasAgentEngineProvider, AtlasAgentEngineDirectProvider } from "./atlas-agent-engine"
 
 const providers: Record<ProviderName, new () => Provider> = {
   supermemory: SupermemoryProvider,
@@ -14,6 +14,7 @@ const providers: Record<ProviderName, new () => Provider> = {
   zep: ZepProvider,
   filesystem: FilesystemProvider,
   rag: RAGProvider,
+  "atlas-agent-engine": AtlasAgentEngineProvider,
   "atlas-agent-engine-direct": AtlasAgentEngineDirectProvider,
 }
 

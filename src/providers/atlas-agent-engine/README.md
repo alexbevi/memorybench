@@ -15,3 +15,9 @@ Receipts live in `data/atlas-agent-engine/`. Keep this directory with benchmark 
 Indexing polls source-derived text for each episode for up to 15 minutes. Timeout fails the phase so a later resume can try again. Acknowledged writes alone do not prove vector search readiness.
 
 `clear()` throws because this SDK cannot delete a complete user scope. New run IDs and `--force` do not remove service data. Interrupted processes can leave a `.lock` file beside a manifest. Stop all writers to that scope before manually removing its lock.
+
+## Conversation extraction
+
+`atlas-agent-engine` records the original nonempty turns with deterministic idempotency keys. The service extracts memories in the background. Search requests semantic and episodic memories across the container's sessions. No benchmark questions or answers are used for readiness probes.
+
+Readiness waits at least three minutes after the last turn, then requires each session to have a searchable episode and an unchanged episode listing for one minute. It times out after 15 minutes. This is an observation heuristic, not proof that all semantic extraction has finished. Sessions for which the service creates no episode will time out even if that behavior is valid. Direct mode avoids background extraction and offers a separate baseline.

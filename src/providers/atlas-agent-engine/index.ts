@@ -186,14 +186,12 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     while (complete.size < wanted.size && this.now() < deadline) {
       for (const { s, w } of writes) {
         if (complete.has(w.id!)) continue
-        const hits = await this.memory
-          .bind({ userId: scope })
-          .searchEpisodes({
-            query: w.content.slice(0, 512),
-            sessionId: s.remoteId,
-            visibility: "private",
-            topK: 100,
-          })
+        const hits = await this.memory.bind({ userId: scope }).searchEpisodes({
+          query: w.content.slice(0, 512),
+          sessionId: s.remoteId,
+          visibility: "private",
+          topK: 100,
+        })
         if (hits.some((h) => h.id === w.id)) complete.add(w.id!)
       }
       progress?.({ completedIds: [...complete], failedIds: [], total: wanted.size })
@@ -219,5 +217,109 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     throw new Error(
       "Atlas full-scope deletion is unsupported by the public JavaScript SDK. Remove remote data through service administration; a new run ID does not delete old data."
     )
+  }
+}
+
+export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
+  override name = "atlas-agent-engine"
+  protected override prepare(session: UnifiedSession, scope: string): SessionState {
+    const state = super.prepare(session, scope)
+    state.writes = turns(session).map((turn, index) => ({
+      ...turn,
+      key: digest([scope, session.sessionId, index, turn]),
+      pending: false,
+    }))
+    return state
+  }
+  protected override async write(
+    memory: Memory,
+    _session: SessionState,
+    entry: SessionState["writes"][number]
+  ) {
+    const result = await memory.recordTurn({
+      role: entry.role,
+      content: entry.content,
+      idempotencyKey: entry.key,
+    })
+    if (!result.acknowledged || !result.id)
+      throw new Error("Atlas did not acknowledge the turn write.")
+    return result.id
+  }
+  override async awaitIndexing(
+    result: IngestResult,
+    tag: string,
+    progress?: IndexingProgressCallback
+  ) {
+    const scope = this.scope(tag)
+    const state = await this.store.read(scope, this.connection)
+    const wanted = new Set(result.documentIds)
+    const sessions = Object.values(state.sessions).filter((s) =>
+      s.writes.some((w) => w.id && wanted.has(w.id))
+    )
+    const known = new Set(sessions.flatMap((s) => s.writes.flatMap((w) => (w.id ? [w.id] : []))))
+    if ([...wanted].some((id) => !known.has(id)))
+      throw new Error("Atlas turn receipts are missing from the local manifest.")
+    const stability = new Map<string, { fingerprint: string; since: number }>()
+    const deadline = this.now() + TIMEOUT_MS
+    while (this.now() < deadline) {
+      const completedIds: string[] = []
+      for (const session of sessions) {
+        if (this.now() - session.lastWrite < 180000) continue
+        const memory = this.memory.bind({ userId: scope })
+        const entries = (await memory.listEpisodes({
+          sessionId: session.remoteId,
+          visibility: "private",
+          limit: 1000,
+        })) as { id?: string; content?: string }[]
+        if (!entries.length || entries.length >= 1000 || entries.some((e) => !e.id || !e.content)) {
+          stability.delete(session.remoteId)
+          continue
+        }
+        const fingerprint = digest(
+          entries
+            .map((e) => [e.id, e.content])
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+        )
+        const previous = stability.get(session.remoteId)
+        if (previous?.fingerprint !== fingerprint)
+          stability.set(session.remoteId, { fingerprint, since: this.now() })
+        const hits = await memory.searchEpisodes({
+          query: entries[0].content!.slice(0, 512),
+          sessionId: session.remoteId,
+          visibility: "private",
+          topK: 100,
+        })
+        if (!hits.some((h) => entries.some((e) => e.id === h.id))) {
+          stability.delete(session.remoteId)
+          continue
+        }
+        if (this.now() - stability.get(session.remoteId)!.since >= 60000)
+          completedIds.push(
+            ...session.writes.flatMap((w) => (w.id && wanted.has(w.id) ? [w.id] : []))
+          )
+      }
+      progress?.({ completedIds, failedIds: [], total: wanted.size })
+      if (completedIds.length === wanted.size) return
+      await this.sleep(POLL_MS)
+    }
+    throw new Error(
+      "Atlas extraction readiness timed out. Every nonempty session needs an observable searchable episode; this is not an extraction-complete signal."
+    )
+  }
+  override async search(query: string, options: SearchOptions): Promise<unknown[]> {
+    const scope = this.scope(options.containerTag)
+    await this.store.read(scope, this.connection)
+    try {
+      return await this.memory
+        .bind({ userId: scope })
+        .search({
+          query,
+          sources: ["semantic", "episodic"],
+          visibility: "private",
+          topK: options.limit ?? 10,
+        })
+    } catch (error) {
+      throw this.failure(error)
+    }
   }
 }

@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { AtlasAgentEngineDirectProvider, TIMEOUT_MS } from "./index"
+import { AtlasAgentEngineDirectProvider, AtlasAgentEngineProvider, TIMEOUT_MS } from "./index"
 import { chunks } from "./content"
 
 const directories: string[] = []
@@ -20,6 +20,24 @@ export async function fixture() {
   const fetchImpl = async (url: string, init: RequestInit) => {
     const body = init.body ? JSON.parse(String(init.body)) : {}
     requests.push({ url, body })
+    if (url.endsWith("/turns")) {
+      const id = `turn-${requests.filter((r) => r.url.endsWith("/turns")).length}`
+      if (!episodes.some((e) => e.session_id === body.session_id))
+        episodes.push({
+          ...body,
+          id: `episode-${id}`,
+          source: "episodic",
+          timestamp: new Date().toISOString(),
+          similarity_score: 0.8,
+        })
+      return Response.json({
+        id,
+        session_id: body.session_id,
+        turn_seq: 1,
+        acknowledged: true,
+        has_embedding: false,
+      })
+    }
     if (url.endsWith("/episodic") && init.method === "POST") {
       const episode = {
         ...body,
@@ -146,4 +164,34 @@ test("unsearchable writes time out rather than pass indexing", async () => {
   f.hide()
   await expect(p.awaitIndexing(result, "run")).rejects.toThrow("timed out")
   expect(f.time()).toBeGreaterThanOrEqual(TIMEOUT_MS)
+})
+
+test("conversation extraction waits, preserves turns, and searches both sources", async () => {
+  const f = await fixture()
+  const p = new AtlasAgentEngineProvider(f.deps)
+  await p.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  const result = await p.ingest([session, { ...session, sessionId: "s2" }], { containerTag: "run" })
+  await p.awaitIndexing(result, "run")
+  expect(f.time()).toBeGreaterThanOrEqual(241000)
+  const writes = f.requests.filter((r) => r.url.endsWith("/turns"))
+  expect(writes).toHaveLength(2)
+  expect(writes[0].body.role).toBe("user")
+  expect(writes[0].body.content).toContain("Source date: 2024-01-01")
+  await p.search("airport", { containerTag: "run" })
+  expect(f.requests.slice(-2).map((r) => r.body.type)).toEqual(["semantic", "episodic"])
+  const restarted = new AtlasAgentEngineProvider(f.deps)
+  await restarted.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  expect(await restarted.ingest([session], { containerTag: "run" })).toEqual({
+    documentIds: [result.documentIds[0]],
+  })
+})
+test("conversation mode cannot pass when one session has no searchable episode", async () => {
+  const f = await fixture()
+  const p = new AtlasAgentEngineProvider(f.deps)
+  await p.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  const result = await p.ingest([session, { ...session, sessionId: "missing" }], {
+    containerTag: "run",
+  })
+  f.episodes.pop()
+  await expect(p.awaitIndexing(result, "run")).rejects.toThrow("readiness timed out")
 })
