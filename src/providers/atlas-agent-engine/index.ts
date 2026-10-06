@@ -121,10 +121,10 @@ export class AtlasAgentEngineDirectProvider implements Provider {
               await this.store.save(scope, state)
             } catch (error) {
               if (
+                !pending &&
                 error instanceof MemoryAPIError &&
-                error.status &&
-                error.status >= 400 &&
-                error.status < 500
+                error.status !== null &&
+                [400, 401, 403, 404, 413, 422, 429].includes(error.status)
               ) {
                 entry.pending = false
                 await this.store.save(scope, state)
@@ -176,6 +176,7 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     const deadline = this.now() + TIMEOUT_MS
     while (complete.size < wanted.size && this.now() < deadline) {
       for (const { s, w } of writes) {
+        if (this.now() >= deadline) break
         if (complete.has(w.id!)) continue
         const hits = await this.memory.bind({ userId: scope }).searchEpisodes({
           query: w.content.slice(0, 512),
@@ -259,6 +260,7 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
     while (this.now() < deadline) {
       const completedIds: string[] = []
       for (const session of sessions) {
+        if (this.now() >= deadline) break
         if (this.now() - session.lastWrite < 180000) continue
         const memory = this.memory.bind({ userId: scope })
         const entries = (await memory.listEpisodes({

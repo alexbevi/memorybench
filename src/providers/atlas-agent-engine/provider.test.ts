@@ -292,3 +292,81 @@ test("long messages repeat speaker/date context and keep source metadata", async
     expect(e.metadata.sourceDate).toBe("2020-01-01")
   }
 })
+
+test("failed reconciliation read cannot turn an uncertain write into a new create", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  f.lose()
+  await expect(p.ingest([session], { containerTag: "run" })).rejects.toThrow()
+  const authFailure = new AtlasAgentEngineDirectProvider({
+    ...f.deps,
+    fetchImpl: async () => Response.json({}, { status: 401 }),
+  })
+  await authFailure.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  await expect(authFailure.ingest([session], { containerTag: "run" })).rejects.toThrow("HTTP 401")
+  const resumed = await f.create()
+  await resumed.ingest([session], { containerTag: "run" })
+  expect(f.episodes).toHaveLength(1)
+})
+test("unresolved uncertain creates remain blocked across resumes", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  f.lose()
+  await expect(p.ingest([session], { containerTag: "run" })).rejects.toThrow()
+  f.episodes.splice(0)
+  for (let i = 0; i < 2; i++) {
+    const resumed = await f.create()
+    await expect(resumed.ingest([session], { containerTag: "run" })).rejects.toThrow(
+      "cannot be reconciled"
+    )
+  }
+  expect(f.requests.filter((r) => r.url.endsWith("/episodic"))).toHaveLength(1)
+})
+test("live validation workflow works against the SDK transport for both modes", async () => {
+  const { validateLive } = await import("./validate")
+  for (const ProviderClass of [AtlasAgentEngineDirectProvider, AtlasAgentEngineProvider]) {
+    const f = await fixture()
+    const logs: string[] = []
+    await validateLive(
+      () => new ProviderClass(f.deps),
+      { apiKey: "", baseUrl: "http://localhost:8000" },
+      (message) => {
+        logs.push(message)
+      }
+    )
+    expect(logs.at(-1)).toContain("Passed")
+  }
+})
+test("empty sessions do not write or wait", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  const result = await p.ingest([{ sessionId: "empty", messages: [] }], { containerTag: "run" })
+  expect(result.documentIds).toEqual([])
+  await p.awaitIndexing(result, "run")
+  expect(f.requests).toHaveLength(0)
+})
+
+test("turn replay reuses the SDK idempotency key after an uncertain response", async () => {
+  const f = await fixture()
+  const keys: string[] = []
+  let accepted: unknown
+  const fetchImpl = async (url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body))
+    keys.push(body.idempotency_key)
+    if (!accepted) {
+      accepted = await (await f.deps.fetchImpl(url, init)).json()
+      return Response.json({ detail: "lost acknowledgement" }, { status: 500 })
+    }
+    return Response.json(accepted)
+  }
+  const first = new AtlasAgentEngineProvider({ ...f.deps, fetchImpl })
+  await first.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  await expect(first.ingest([session], { containerTag: "run" })).rejects.toThrow("HTTP 500")
+  const resumed = new AtlasAgentEngineProvider({ ...f.deps, fetchImpl })
+  await resumed.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  await resumed.ingest([session], { containerTag: "run" })
+  expect(keys).toHaveLength(2)
+  expect(keys[0]).toHaveLength(64)
+  expect(keys[1]).toBe(keys[0])
+  expect(f.episodes).toHaveLength(1)
+})

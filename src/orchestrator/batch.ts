@@ -278,6 +278,7 @@ export class BatchManager {
       return
     }
 
+    const providerWidth = Math.max(15, ...reports.map(({ provider }) => provider.length))
     const pad = (s: string, n: number) => s.padEnd(n)
     const padNum = (n: number, width: number) => n.toString().padStart(width)
     const padPct = (n: number, width: number) => `${(n * 100).toFixed(1)}%`.padStart(width)
@@ -296,11 +297,19 @@ export class BatchManager {
 
     console.log("\nOVERALL ACCURACY")
     console.log(
-      "┌" + "─".repeat(17) + "┬" + "─".repeat(10) + "┬" + "─".repeat(9) + "┬" + "─".repeat(10) + "┐"
+      "┌" +
+        "─".repeat(providerWidth + 2) +
+        "┬" +
+        "─".repeat(10) +
+        "┬" +
+        "─".repeat(9) +
+        "┬" +
+        "─".repeat(10) +
+        "┐"
     )
     console.log(
       "│ " +
-        pad("Provider", 15) +
+        pad("Provider", providerWidth) +
         " │ " +
         pad("Correct", 8) +
         " │ " +
@@ -310,13 +319,21 @@ export class BatchManager {
         " │"
     )
     console.log(
-      "├" + "─".repeat(17) + "┼" + "─".repeat(10) + "┼" + "─".repeat(9) + "┼" + "─".repeat(10) + "┤"
+      "├" +
+        "─".repeat(providerWidth + 2) +
+        "┼" +
+        "─".repeat(10) +
+        "┼" +
+        "─".repeat(9) +
+        "┼" +
+        "─".repeat(10) +
+        "┤"
     )
     for (const { provider, report } of sortedByAccuracy) {
       const best = provider === bestAccuracy ? " ←" : ""
       console.log(
         "│ " +
-          pad(provider, 15) +
+          pad(provider, providerWidth) +
           " │ " +
           padNum(report.summary.correctCount, 8) +
           " │ " +
@@ -328,13 +345,21 @@ export class BatchManager {
       )
     }
     console.log(
-      "└" + "─".repeat(17) + "┴" + "─".repeat(10) + "┴" + "─".repeat(9) + "┴" + "─".repeat(10) + "┘"
+      "└" +
+        "─".repeat(providerWidth + 2) +
+        "┴" +
+        "─".repeat(10) +
+        "┴" +
+        "─".repeat(9) +
+        "┴" +
+        "─".repeat(10) +
+        "┘"
     )
 
     console.log("\nLATENCY (avg ms)")
     console.log(
       "┌" +
-        "─".repeat(17) +
+        "─".repeat(providerWidth + 2) +
         "┬" +
         "─".repeat(9) +
         "┬" +
@@ -349,7 +374,7 @@ export class BatchManager {
     )
     console.log(
       "│ " +
-        pad("Provider", 15) +
+        pad("Provider", providerWidth) +
         " │ " +
         pad("Ingest", 7) +
         " │ " +
@@ -364,7 +389,7 @@ export class BatchManager {
     )
     console.log(
       "├" +
-        "─".repeat(17) +
+        "─".repeat(providerWidth + 2) +
         "┼" +
         "─".repeat(9) +
         "┼" +
@@ -394,7 +419,7 @@ export class BatchManager {
       const totalMark = report.latency.total.mean === latencyMins.total ? "←" : " "
       console.log(
         "│ " +
-          pad(provider, 15) +
+          pad(provider, providerWidth) +
           " │ " +
           padNum(report.latency.ingest.mean, 6) +
           ingestMark +
@@ -415,7 +440,7 @@ export class BatchManager {
     }
     console.log(
       "└" +
-        "─".repeat(17) +
+        "─".repeat(providerWidth + 2) +
         "┴" +
         "─".repeat(9) +
         "┴" +
@@ -435,7 +460,7 @@ export class BatchManager {
       console.log(`\nRETRIEVAL METRICS (K=${k})`)
       console.log(
         "┌" +
-          "─".repeat(17) +
+          "─".repeat(providerWidth + 2) +
           "┬" +
           "─".repeat(9) +
           "┬" +
@@ -452,7 +477,7 @@ export class BatchManager {
       )
       console.log(
         "│ " +
-          pad("Provider", 15) +
+          pad("Provider", providerWidth) +
           " │ " +
           pad("Hit@K", 7) +
           " │ " +
@@ -469,7 +494,7 @@ export class BatchManager {
       )
       console.log(
         "├" +
-          "─".repeat(17) +
+          "─".repeat(providerWidth + 2) +
           "┼" +
           "─".repeat(9) +
           "┼" +
@@ -490,7 +515,7 @@ export class BatchManager {
           const r = report.retrieval
           console.log(
             "│ " +
-              pad(provider, 15) +
+              pad(provider, providerWidth) +
               " │ " +
               padPct(r.hitAtK, 7) +
               " │ " +
@@ -508,7 +533,7 @@ export class BatchManager {
         } else {
           console.log(
             "│ " +
-              pad(provider, 15) +
+              pad(provider, providerWidth) +
               " │ " +
               pad("N/A", 7) +
               " │ " +
@@ -527,7 +552,7 @@ export class BatchManager {
       }
       console.log(
         "└" +
-          "─".repeat(17) +
+          "─".repeat(providerWidth + 2) +
           "┴" +
           "─".repeat(9) +
           "┴" +
@@ -553,33 +578,32 @@ export class BatchManager {
 
     if (allTypes.size > 0) {
       console.log("\nBY QUESTION TYPE")
-      const providerWidth = 13
       const headerRow = ["│ " + pad("Type", 17)]
       for (const { provider } of reports) {
         headerRow.push(pad(provider, providerWidth))
       }
-      headerRow.push(pad("Best", 13) + " │")
+      headerRow.push(pad("Best", providerWidth) + " │")
 
       const borderTop =
         "┌" +
         "─".repeat(19) +
         reports.map(() => "┬" + "─".repeat(providerWidth + 2)).join("") +
         "┬" +
-        "─".repeat(15) +
+        "─".repeat(providerWidth + 2) +
         "┐"
       const borderMid =
         "├" +
         "─".repeat(19) +
         reports.map(() => "┼" + "─".repeat(providerWidth + 2)).join("") +
         "┼" +
-        "─".repeat(15) +
+        "─".repeat(providerWidth + 2) +
         "┤"
       const borderBot =
         "└" +
         "─".repeat(19) +
         reports.map(() => "┴" + "─".repeat(providerWidth + 2)).join("") +
         "┴" +
-        "─".repeat(15) +
+        "─".repeat(providerWidth + 2) +
         "┘"
 
       console.log(borderTop)
@@ -603,7 +627,7 @@ export class BatchManager {
             row.push(pad("N/A", providerWidth))
           }
         }
-        row.push(pad(bestProvider, 13) + " │")
+        row.push(pad(bestProvider, providerWidth) + " │")
         console.log(row.join(" │ "))
       }
       console.log(borderBot)

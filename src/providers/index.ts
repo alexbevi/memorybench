@@ -38,7 +38,12 @@ export function getProviderInfo(name: ProviderName): {
   const provider = createProvider(name)
   return {
     name,
-    displayName: name.charAt(0).toUpperCase() + name.slice(1),
+    displayName:
+      name === "atlas-agent-engine"
+        ? "Atlas Agent Engine"
+        : name === "atlas-agent-engine-direct"
+          ? "Atlas Agent Engine Direct"
+          : name.charAt(0).toUpperCase() + name.slice(1),
     concurrency: provider.concurrency || null,
   }
 }
