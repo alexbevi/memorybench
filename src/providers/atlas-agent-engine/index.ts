@@ -8,6 +8,7 @@ import type {
   IndexingProgressCallback,
 } from "../../types/provider"
 import type { UnifiedSession } from "../../types/unified"
+import { connectionOptions } from "./config"
 import { chunks, turns } from "./content"
 import { digest, Store, type SessionState } from "./state"
 
@@ -34,33 +35,11 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
   }
   async initialize(config: ProviderConfig) {
-    if (
-      !config.baseUrl ||
-      config.apiKey ||
-      config.projectId ||
-      process.env.AGENTIC_MEMORY_SERVICE_ACCOUNT_TOKEN ||
-      process.env.AGENTIC_MEMORY_API_KEY ||
-      process.env.AGENTIC_MEMORY_PROJECT_ID
-    )
-      throw new Error("Local Atlas requires AGENTIC_MEMORY_BASE_URL and no token or project ID.")
-    const url = new URL(config.baseUrl)
-    if (
-      !["http:", "https:"].includes(url.protocol) ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash
-    )
-      throw new Error(
-        "Atlas base URL must be an HTTP(S) URL without credentials, query, or fragment."
-      )
-    this.connection = digest([url.href, "", this.name, 1])
-    this.memory = new Memory({
-      baseUrl: url.href.replace(/\/$/, ""),
-      projectId: "",
-      fetchImpl: this.deps.fetchImpl,
-    })
+    const options = connectionOptions(config)
+    this.connection = digest([options.baseUrl, options.projectId, this.name, 1])
+    this.memory = new Memory({ ...options, fetchImpl: this.deps.fetchImpl })
   }
+
   protected scope(tag: string) {
     if (!this.memory) throw new Error("Initialize Atlas provider first.")
     return digest([this.name, tag])
@@ -173,6 +152,17 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     )
   }
   async awaitIndexing(result: IngestResult, tag: string, progress?: IndexingProgressCallback) {
+    try {
+      await this.waitForReadiness(result, tag, progress)
+    } catch (error) {
+      throw this.failure(error)
+    }
+  }
+  protected async waitForReadiness(
+    result: IngestResult,
+    tag: string,
+    progress?: IndexingProgressCallback
+  ) {
     const scope = this.scope(tag)
     const state = await this.store.read(scope, this.connection)
     const wanted = new Set(result.documentIds)
@@ -245,7 +235,7 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
       throw new Error("Atlas did not acknowledge the turn write.")
     return result.id
   }
-  override async awaitIndexing(
+  protected override async waitForReadiness(
     result: IngestResult,
     tag: string,
     progress?: IndexingProgressCallback
@@ -310,14 +300,12 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
     const scope = this.scope(options.containerTag)
     await this.store.read(scope, this.connection)
     try {
-      return await this.memory
-        .bind({ userId: scope })
-        .search({
-          query,
-          sources: ["semantic", "episodic"],
-          visibility: "private",
-          topK: options.limit ?? 10,
-        })
+      return await this.memory.bind({ userId: scope }).search({
+        query,
+        sources: ["semantic", "episodic"],
+        visibility: "private",
+        topK: options.limit ?? 10,
+      })
     } catch (error) {
       throw this.failure(error)
     }

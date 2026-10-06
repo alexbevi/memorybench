@@ -195,3 +195,47 @@ test("conversation mode cannot pass when one session has no searchable episode",
   f.episodes.pop()
   await expect(p.awaitIndexing(result, "run")).rejects.toThrow("readiness timed out")
 })
+
+test("hosted SDK uses project routes and bearer token without persisting credentials", async () => {
+  const f = await fixture()
+  let authorization: string | null = null
+  const p = new AtlasAgentEngineDirectProvider({
+    ...f.deps,
+    fetchImpl: async (url, init) => {
+      authorization = new Headers(init.headers).get("authorization")
+      return f.deps.fetchImpl(url, init)
+    },
+  })
+  await p.initialize({ apiKey: "test-token", projectId: "project one" })
+  await p.ingest([session], { containerTag: "hosted" })
+  expect(f.requests[0].url).toBe(
+    "https://agentengine.mongodb.com/api/v1/projects/project%20one/memory/episodic"
+  )
+  expect(authorization as string | null).toBe("Bearer test-token")
+  const { readdir, readFile } = await import("node:fs/promises")
+  for (const name of await readdir(f.deps.stateDir))
+    expect(await readFile(join(f.deps.stateDir, name), "utf8")).not.toContain("test-token")
+  const renewed = new AtlasAgentEngineDirectProvider(f.deps)
+  await renewed.initialize({ apiKey: "new-token", projectId: "project one" })
+  await renewed.ingest([session], { containerTag: "hosted" })
+  expect(f.episodes).toHaveLength(1)
+})
+test("invalid configuration and authentication responses fail without leaking secrets", async () => {
+  const p = new AtlasAgentEngineDirectProvider()
+  await expect(p.initialize({ apiKey: "secret" })).rejects.toThrow("requires both")
+  await expect(
+    p.initialize({ apiKey: "secret", projectId: "p", baseUrl: "http://localhost" })
+  ).rejects.toThrow("HTTPS")
+  const f = await fixture()
+  const failing = new AtlasAgentEngineDirectProvider({
+    ...f.deps,
+    fetchImpl: async () => Response.json({ detail: "secret-token" }, { status: 401 }),
+  })
+  await failing.initialize({ apiKey: "secret-token", projectId: "p" })
+  await expect(failing.ingest([session], { containerTag: "run" })).rejects.toThrow("HTTP 401")
+  try {
+    await failing.search("airport", { containerTag: "run" })
+  } catch (e) {
+    expect(String(e)).not.toContain("secret-token")
+  }
+})

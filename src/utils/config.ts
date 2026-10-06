@@ -1,3 +1,4 @@
+import type { ProviderConfig } from "../types/provider"
 export interface Config {
   supermemoryApiKey: string
   supermemoryBaseUrl: string
@@ -18,11 +19,15 @@ export const config: Config = {
   googleApiKey: process.env.GOOGLE_API_KEY || "",
 }
 
-export function getProviderConfig(provider: string): { apiKey: string; baseUrl?: string } {
+export function getProviderConfig(provider: string): ProviderConfig {
   switch (provider) {
     case "atlas-agent-engine":
     case "atlas-agent-engine-direct":
-      return { apiKey: "", baseUrl: process.env.AGENTIC_MEMORY_BASE_URL }
+      return {
+        apiKey: process.env.AGENTIC_MEMORY_SERVICE_ACCOUNT_TOKEN || "",
+        baseUrl: process.env.AGENTIC_MEMORY_BASE_URL,
+        projectId: process.env.AGENTIC_MEMORY_PROJECT_ID,
+      }
     case "supermemory":
       return { apiKey: config.supermemoryApiKey, baseUrl: config.supermemoryBaseUrl }
     case "mem0":
