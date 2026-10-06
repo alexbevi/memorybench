@@ -58,9 +58,12 @@ export async function runIngestPhase(
       })
 
       try {
-        const completedSessions =
-          checkpoint.questions[question.questionId].phases.ingest.completedSessions
-        const combinedResult: IngestResult = { documentIds: [], taskIds: [] }
+        const previous = checkpoint.questions[question.questionId].phases.ingest
+        const completedSessions = [...previous.completedSessions]
+        const combinedResult: IngestResult = {
+          documentIds: [...(previous.ingestResult?.documentIds || [])],
+          taskIds: [...(previous.ingestResult?.taskIds || [])],
+        }
 
         for (const session of sessions) {
           if (completedSessions.includes(session.sessionId)) {
@@ -69,33 +72,24 @@ export async function runIngestPhase(
 
           const result = await provider.ingest([session], { containerTag })
 
-          combinedResult.documentIds.push(...result.documentIds)
+          combinedResult.documentIds = [
+            ...new Set([...combinedResult.documentIds, ...result.documentIds]),
+          ]
           if (result.taskIds) {
-            combinedResult.taskIds!.push(...result.taskIds)
+            combinedResult.taskIds = [...new Set([...combinedResult.taskIds!, ...result.taskIds])]
           }
 
           completedSessions.push(session.sessionId)
           checkpointManager.updatePhase(checkpoint, question.questionId, "ingest", {
-            completedSessions,
+            completedSessions: [...completedSessions],
+            ingestResult: structuredClone(combinedResult),
           })
+          // Persist the receipt with the session before moving to the next remote write.
+          await checkpointManager.flush(checkpoint.runId)
         }
 
         if (combinedResult.taskIds && combinedResult.taskIds.length === 0) {
           delete combinedResult.taskIds
-        }
-
-        const existingResult = checkpoint.questions[question.questionId].phases.ingest.ingestResult
-        if (existingResult) {
-          combinedResult.documentIds = [
-            ...existingResult.documentIds,
-            ...combinedResult.documentIds,
-          ]
-          if (existingResult.taskIds || combinedResult.taskIds) {
-            combinedResult.taskIds = [
-              ...(existingResult.taskIds || []),
-              ...(combinedResult.taskIds || []),
-            ]
-          }
         }
 
         const durationMs = Date.now() - startTime
