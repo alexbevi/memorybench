@@ -8,8 +8,10 @@ import type {
   IndexingProgressCallback,
 } from "../../types/provider"
 import type { UnifiedSession } from "../../types/unified"
+import { prompts } from "./prompts"
+import { normalize, searchLimit } from "./results"
 import { connectionOptions } from "./config"
-import { chunks, turns } from "./content"
+import { transcriptChunks, turns } from "./content"
 import { digest, Store, type SessionState } from "./state"
 
 export const POLL_MS = 5000
@@ -24,6 +26,8 @@ export interface Dependencies {
 export class AtlasAgentEngineDirectProvider implements Provider {
   name = "atlas-agent-engine-direct"
   concurrency = { default: 2 }
+  prompts = prompts
+  protected sources = ["episodic"]
   protected memory!: Memory
   protected connection!: string
   protected store: Store
@@ -50,14 +54,11 @@ export class AtlasAgentEngineDirectProvider implements Provider {
       fingerprint: digest(session),
       remoteId: digest([scope, session.sessionId]),
       lastWrite: 0,
-      writes: chunks(
-        turns(session)
-          .map((m) => m.content)
-          .join("\n\n")
-      ).map((chunk, i) => ({
+      writes: transcriptChunks(session).map((chunk, i) => ({
         key: digest([scope, session.sessionId, i, chunk]),
         content: chunk.content,
         role: "user",
+        metadata: { ...chunk.metadata, chunkIndex: i },
         pending: false,
       })),
     }
@@ -87,7 +88,7 @@ export class AtlasAgentEngineDirectProvider implements Provider {
       content: entry.content,
       sessionId: session.remoteId,
       visibility: "private",
-      metadata: { memorybenchKey: entry.key, sourceSessionId: session.sourceId },
+      metadata: { ...entry.metadata, memorybenchKey: entry.key, sourceSessionId: session.sourceId },
     })
     if (!result.acknowledged || !result.id)
       throw new Error("Atlas did not acknowledge the episode write.")
@@ -193,12 +194,15 @@ export class AtlasAgentEngineDirectProvider implements Provider {
       )
   }
   async search(query: string, options: SearchOptions): Promise<unknown[]> {
+    const limit = searchLimit(options)
+    if (limit === 0) return []
     const scope = this.scope(options.containerTag)
     await this.store.read(scope, this.connection)
     try {
-      return await this.memory
+      const hits = await this.memory
         .bind({ userId: scope })
-        .search({ query, sources: ["episodic"], visibility: "private", topK: options.limit ?? 10 })
+        .search({ query, sources: this.sources, visibility: "private", topK: limit })
+      return normalize(hits, options)
     } catch (error) {
       throw this.failure(error)
     }
@@ -212,6 +216,7 @@ export class AtlasAgentEngineDirectProvider implements Provider {
 
 export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
   override name = "atlas-agent-engine"
+  protected override sources = ["semantic", "episodic"]
   protected override prepare(session: UnifiedSession, scope: string): SessionState {
     const state = super.prepare(session, scope)
     state.writes = turns(session).map((turn, index) => ({
@@ -295,19 +300,5 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
     throw new Error(
       "Atlas extraction readiness timed out. Every nonempty session needs an observable searchable episode; this is not an extraction-complete signal."
     )
-  }
-  override async search(query: string, options: SearchOptions): Promise<unknown[]> {
-    const scope = this.scope(options.containerTag)
-    await this.store.read(scope, this.connection)
-    try {
-      return await this.memory.bind({ userId: scope }).search({
-        query,
-        sources: ["semantic", "episodic"],
-        visibility: "private",
-        topK: options.limit ?? 10,
-      })
-    } catch (error) {
-      throw this.failure(error)
-    }
   }
 }

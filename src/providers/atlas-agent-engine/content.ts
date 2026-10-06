@@ -6,7 +6,8 @@ export function turns(session: UnifiedSession) {
     .map((m) => ({
       role: m.role,
       content: [
-        m.timestamp && `Source date: ${m.timestamp}`,
+        (m.timestamp || session.metadata?.date) &&
+          `Source date: ${m.timestamp || session.metadata?.date}`,
         m.speaker && `Speaker: ${m.speaker}`,
         `${m.role}: ${m.content}`,
       ]
@@ -30,4 +31,28 @@ export function chunks(text: string) {
     start = end - 320
   }
   return result
+}
+
+export function transcriptChunks(session: UnifiedSession) {
+  return session.messages.flatMap((message, messageIndex) => {
+    if (!message.content.trim()) return []
+    const sourceDate = message.timestamp ?? session.metadata?.date
+    const header = [
+      typeof sourceDate === "string" && `Source date: ${sourceDate}`,
+      message.speaker && `Speaker: ${message.speaker}`,
+      `Role: ${message.role}`,
+    ]
+      .filter(Boolean)
+      .join("\n")
+    return chunks(message.content).map((part) => ({
+      content: `${header}\n${part.content}`,
+      metadata: {
+        sourceSessionId: session.sessionId,
+        sourceDate,
+        messageIndex,
+        start: part.start,
+        end: part.end,
+      },
+    }))
+  })
 }

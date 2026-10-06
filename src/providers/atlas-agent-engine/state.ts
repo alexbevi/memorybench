@@ -9,6 +9,7 @@ const writeSchema = z.object({
   key: z.string(),
   content: z.string(),
   role: z.string(),
+  metadata: z.record(z.unknown()).optional(),
   id: z.string().optional(),
   pending: z.boolean(),
 })

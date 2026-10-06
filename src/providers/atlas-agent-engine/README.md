@@ -1,6 +1,6 @@
 # Atlas Agent Engine
 
-`atlas-agent-engine-direct` writes private episodic memories using the public JavaScript SDK, pinned to 0.11.7. Transcripts retain roles, speakers and available message dates. Direct writes use chunks of at most 1,600 Unicode code points with 320 points of overlap.
+`atlas-agent-engine-direct` writes private episodic memories using the public JavaScript SDK, pinned to 0.11.7. Transcripts retain roles, speakers and available message dates. Direct writes split each message into chunks of at most 1,600 Unicode code points with 320 points of overlap, then prepend role, speaker and date context to every fragment. No message text is truncated.
 
 ## Local configuration
 
@@ -29,3 +29,11 @@ Set `AGENTIC_MEMORY_SERVICE_ACCOUNT_TOKEN` and `AGENTIC_MEMORY_PROJECT_ID`. Leav
 Create the service account and exchange its credentials for an access token outside MemoryBench, following the [Atlas authentication instructions](https://www.mongodb.com/docs/agentengine/add-features/memory-only/) and [JavaScript SDK configuration](https://www.mongodb.com/docs/agentengine/sdk/javascript/packages/agent-engine-memory/). Refresh an expired token and resume the same run in a new process. Tokens are not written to manifests, and token rotation does not invalidate receipts.
 
 HTTP 401/403 means check the token and project access. For 404, verify that a hosted project ID is present or that local configuration has neither token nor project ID. Check service provisioning for unavailable-runtime errors. For 429, reduce benchmark concurrency and resume. The SDK handles selected transient transport failures; direct episode creation is not automatically retried. Response bodies are omitted from adapter error messages to avoid exposing credentials.
+
+## Retrieval and answering
+
+The adapter applies the benchmark's similarity threshold locally because the SDK does not forward that setting for semantic or episodic searches. Missing scores are excluded when a threshold is requested. Results are deduplicated by source and ID, ranked by score, and capped by the requested limit. Filtering can return fewer results; the adapter does not issue refill queries. Scores are not calibrated across providers or memory types.
+
+Answer context includes content, memory type, score and available source provenance. Embeddings and arbitrary metadata are omitted. The answer prompt distinguishes source dates from service record timestamps and handles conflicting evidence. The default benchmark judge remains unchanged.
+
+Session dates are retained in submitted text and direct episode metadata. Conversation extraction can lose source dates or session provenance; the adapter does not invent them or fetch original transcripts to supplement extraction results.

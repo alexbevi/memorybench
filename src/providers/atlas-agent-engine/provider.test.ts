@@ -239,3 +239,56 @@ test("invalid configuration and authentication responses fail without leaking se
     expect(String(e)).not.toContain("secret-token")
   }
 })
+
+test("normalization honors zero threshold, excludes missing scores, and drops embeddings", async () => {
+  const { normalize } = await import("./results")
+  const hit = {
+    id: "a",
+    source: "episodic" as const,
+    content: "Fact",
+    timestamp: new Date("2024-01-01"),
+    embedding: [1, 2],
+    similarity_score: 0,
+    metadata: { sourceDate: "2020-01-01", sourceSessionId: "s", huge: "omit" },
+  }
+  const results = normalize(
+    [
+      hit,
+      hit,
+      { ...hit, id: "b", similarity_score: null },
+      { ...hit, id: "c", similarity_score: -0.2 },
+    ],
+    { containerTag: "run", threshold: 0 }
+  )
+  expect(results).toHaveLength(1)
+  expect(results[0].sourceDate).toBe("2020-01-01")
+  expect(results[0].recordedAt).toBe("2024-01-01T00:00:00.000Z")
+  expect(JSON.stringify(results)).not.toContain("embedding")
+  expect(JSON.stringify(results)).not.toContain("huge")
+  const f = await fixture()
+  const p = await f.create()
+  expect(await p.search("q", { containerTag: "run", limit: 0 })).toEqual([])
+  expect(f.requests).toHaveLength(0)
+  await expect(p.search("q", { containerTag: "run", limit: -1 })).rejects.toThrow("limit")
+})
+
+test("long messages repeat speaker/date context and keep source metadata", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  await p.ingest(
+    [
+      {
+        ...session,
+        metadata: { date: "2020-01-01" },
+        messages: [{ role: "assistant", speaker: "Bob", content: "x".repeat(4000) }],
+      },
+    ],
+    { containerTag: "long" }
+  )
+  expect(f.episodes.length).toBeGreaterThan(1)
+  for (const e of f.episodes) {
+    expect(e.content).toContain("Speaker: Bob")
+    expect(e.content).toContain("Role: assistant")
+    expect(e.metadata.sourceDate).toBe("2020-01-01")
+  }
+})
