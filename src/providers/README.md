@@ -55,3 +55,10 @@ Example: See `src/providers/zep/prompts.ts`
 | `supermemory` | `supermemory` | Raw JSON sessions |
 | `mem0` | `mem0ai` | v2 API with graph |
 | `zep` | `@getzep/zep-cloud` | Graph-based, custom prompts |
+
+Benchmark answering uses `src/prompts/answer.ts` for every provider. Provider
+`answerPrompt` values are legacy and are not used by the answer phase. The shared
+policy uses ranked evidence up to 8,000 context tokens, at most 1,000 output tokens,
+and temperature 0 where supported. The selected answering model is run-level;
+comparisons must use the same model. See each answer checkpoint's `answerPolicy`
+for the policy version, model, budget, and truncation counts.

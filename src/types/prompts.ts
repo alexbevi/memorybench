@@ -6,6 +6,7 @@ export type JudgePromptFunction = (
 ) => JudgePromptResult
 
 export interface ProviderPrompts {
+  /** Legacy provider prompt; benchmark answering always uses the shared answer policy. */
   answerPrompt?: string | ((question: string, context: unknown[], questionDate?: string) => string)
   judgePrompt?: JudgePromptFunction
 }

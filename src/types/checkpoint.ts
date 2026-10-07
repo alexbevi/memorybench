@@ -1,3 +1,4 @@
+import type { AnswerPolicy } from "../prompts/answer"
 import type { SearchResult, RetrievalMetrics } from "./unified"
 import type { IngestResult } from "./provider"
 import type { ConcurrencyConfig } from "./concurrency"
@@ -56,6 +57,7 @@ export interface AnswerPhaseCheckpoint {
   status: PhaseStatus
   hypothesis?: string
   promptTokens?: number
+  answerPolicy?: AnswerPolicy
   basePromptTokens?: number
   contextTokens?: number
   startedAt?: string

@@ -218,3 +218,22 @@ Atlas direct may split long messages into chunks and repeats those headers.
 Use new run IDs and ingest again when comparing runs created before this input
 format change. Resuming an old checkpoint reuses previously ingested data and
 does not retrofit speaker attribution or source headers.
+
+### Shared answering policy
+
+All providers use the same answering instructions, an 8,000-token evidence budget,
+a 1,000-token output limit, and temperature 0 for models that support it. Select
+the same answering model for compared runs; the `compare` command shares that
+selection across providers. Provider-specific answer prompts are no longer used.
+
+Evidence stays in retrieval order, using provider JSON with embedding vectors
+removed. If the budget is exceeded, the next record is included as a marked
+prefix excerpt and later records are excluded. Source content, dates, and speaker
+attribution remain available to the common prompt. Context token counts use the
+selected model's tokenizer, with the existing approximation for Google models.
+
+Each answer checkpoint records `answerPolicy`, including version `shared-v1`,
+model, generation settings, evidence budget, and included/retrieved result counts.
+Old answers lack this marker and must be regenerated for a shared-policy
+comparison. The input-parity change above also requires fresh ingestion under new
+run IDs; regenerating answers alone cannot repair old ingested data.

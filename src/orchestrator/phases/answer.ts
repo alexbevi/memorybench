@@ -10,11 +10,9 @@ import { CheckpointManager } from "../checkpoint"
 import { config } from "../../utils/config"
 import { logger } from "../../utils/logger"
 import { getModelConfig, ModelConfig, DEFAULT_ANSWERING_MODEL } from "../../utils/models"
-import { buildDefaultAnswerPrompt } from "../../prompts/defaults"
-import { buildContextString } from "../../types/prompts"
+import { prepareAnswer } from "../../prompts/answer"
 import { ConcurrentExecutor } from "../concurrent"
 import { resolveConcurrency } from "../../types/concurrency"
-import { countTokens } from "../../utils/tokens"
 
 type LanguageModel =
   | ReturnType<typeof createOpenAI>
@@ -46,33 +44,15 @@ function getAnsweringModel(modelAlias: string): {
   }
 }
 
-function buildAnswerPrompt(
-  question: string,
-  context: unknown[],
-  questionDate?: string,
-  provider?: Provider
-): string {
-  if (provider?.prompts?.answerPrompt) {
-    const customPrompt = provider.prompts.answerPrompt
-    if (typeof customPrompt === "function") {
-      return customPrompt(question, context, questionDate)
-    }
-    const contextStr = buildContextString(context)
-    return customPrompt
-      .replace("{{question}}", question)
-      .replace("{{questionDate}}", questionDate || "Not specified")
-      .replace("{{context}}", contextStr)
-  }
-
-  return buildDefaultAnswerPrompt(question, context, questionDate)
-}
-
 export async function runAnswerPhase(
   benchmark: Benchmark,
   checkpoint: RunCheckpoint,
   checkpointManager: CheckpointManager,
   questionIds?: string[],
-  provider?: Provider
+  provider?: Provider,
+  generate: (
+    options: Parameters<typeof generateText>[0]
+  ) => Promise<{ text: string }> = generateText
 ): Promise<void> {
   const questions = benchmark.getQuestions()
   const targetQuestions = questionIds
@@ -119,27 +99,13 @@ export async function runAnswerPhase(
         const context: unknown[] = searchData.results || []
         const questionDate = checkpoint.questions[question.questionId]?.questionDate
 
-        const basePrompt = buildAnswerPrompt(question.question, [], questionDate, provider)
-        const prompt = buildAnswerPrompt(question.question, context, questionDate, provider)
-
-        const basePromptTokens = countTokens(basePrompt, modelConfig)
-        const promptTokens = countTokens(prompt, modelConfig)
-        // Derive contextTokens from the difference so it reflects the actual formatted
-        // context in the prompt (not the raw JSON), which matters for providers with
-        // custom prompt functions that transform context (e.g. Zep's XML-like tags).
-        const contextTokens = Math.max(0, promptTokens - basePromptTokens)
-
-        const params: Record<string, unknown> = {
+        const { prompt, settings, policy, promptTokens, basePromptTokens, contextTokens } =
+          prepareAnswer(question.question, context, modelConfig, questionDate)
+        const { text } = await generate({
           model: client(modelConfig.id),
           prompt,
-          maxTokens: modelConfig.defaultMaxTokens,
-        }
-
-        if (modelConfig.supportsTemperature) {
-          params.temperature = modelConfig.defaultTemperature
-        }
-
-        const { text } = await generateText(params as Parameters<typeof generateText>[0])
+          ...settings,
+        })
 
         const durationMs = Date.now() - startTime
         checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {
@@ -148,6 +114,7 @@ export async function runAnswerPhase(
           promptTokens,
           basePromptTokens,
           contextTokens,
+          answerPolicy: policy,
           completedAt: new Date().toISOString(),
           durationMs,
         })
