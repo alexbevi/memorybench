@@ -6,7 +6,7 @@ import { LoCoMoBenchmark } from "../../benchmarks/locomo"
 import { Mem0Provider } from "./index"
 import { turns, transcriptChunks } from "../atlas-agent-engine/content"
 
-test("LoCoMo sends both human speakers, source dates and sessions to Mem0 and Atlas", async () => {
+test("LoCoMo sends both named personas, source dates and sessions to Mem0 and Atlas", async () => {
   const benchmark = new LoCoMoBenchmark()
   const directory = await mkdtemp(join(tmpdir(), "locomo-parity-"))
   const path = join(directory, "fixture.json")
