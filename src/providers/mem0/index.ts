@@ -1,3 +1,4 @@
+import { sourceMessages } from "../../utils/source-message"
 import { webcrypto } from "crypto"
 if (typeof window === "undefined") {
   ;(globalThis as unknown as { window: { crypto: Crypto } }).window = {
@@ -47,7 +48,10 @@ const CUSTOM_INSTRUCTIONS = `Generate personal memories that follow these guidel
    - Name specific activities (e.g., "charity race for mental health" rather than just "exercise")
    - Include emotional context and personal growth elements
 
-4. Extract memories only from user messages, not incorporating assistant responses
+4. Preserve facts from every named human speaker in the supplied source conversation.
+   - Source headers identify the speaker, session, date, and original role
+   - Attribute each fact to its named speaker; never merge different people
+   - Assistant messages may provide context, but do not treat an assistant as a human speaker
 
 5. Format each memory as a paragraph with a clear narrative structure that captures the person's experience, challenges, and aspirations`
 
@@ -81,10 +85,7 @@ export class Mem0Provider implements Provider {
     const eventIds: string[] = []
 
     for (const session of sessions) {
-      const messages = session.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }))
+      const messages = sourceMessages(session)
 
       const addOptions: MemoryOptions = {
         user_id: options.containerTag,

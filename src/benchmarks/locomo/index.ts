@@ -160,7 +160,8 @@ export class LoCoMoBenchmark implements Benchmark {
       if (!Array.isArray(messages)) continue
 
       const unifiedMessages: UnifiedMessage[] = messages.map((m) => ({
-        role: m.speaker === speakerA ? ("user" as const) : ("assistant" as const),
+        // Both LoCoMo participants are people, not an assistant responding to a user.
+        role: "user" as const,
         content: m.text,
         speaker: m.speaker,
       }))

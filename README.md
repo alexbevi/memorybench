@@ -207,3 +207,14 @@ Re-running same ID resumes. Use `--force` to restart.
 ## License
 
 MIT
+
+### Source input parity
+
+LoCoMo's two participants are both human speakers. Both use the `user` transport
+role, with their actual names retained in source headers. Mem0 and Atlas receive
+the same message content with speaker, source date, session ID, and original role.
+Atlas direct may split long messages into chunks and repeats those headers.
+
+Use new run IDs and ingest again when comparing runs created before this input
+format change. Resuming an old checkpoint reuses previously ingested data and
+does not retrofit speaker attribution or source headers.
