@@ -1,6 +1,13 @@
+import { compatibleFetch } from "./transport"
 import { diagnose } from "../../utils/diagnostics"
 import { logger } from "../../utils/logger"
-import { Memory, MemoryAPIError, type FetchLike } from "@mongodb-js/agent-engine-sdk-memory"
+import {
+  Memory,
+  MemoryAPIError,
+  MemoryServerError,
+  MemoryConnectionError,
+  type FetchLike,
+} from "@mongodb-js/agent-engine-sdk-memory"
 import type {
   Provider,
   ProviderConfig,
@@ -43,7 +50,7 @@ export class AtlasAgentEngineDirectProvider implements Provider {
   async initialize(config: ProviderConfig) {
     const options = connectionOptions(config)
     this.connection = digest([options.baseUrl, options.projectId, this.name, 1])
-    this.memory = new Memory({ ...options, fetchImpl: this.deps.fetchImpl })
+    this.memory = new Memory({ ...options, fetchImpl: compatibleFetch(this.deps.fetchImpl) })
   }
 
   protected scope(tag: string) {
@@ -185,9 +192,17 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     })
   }
   protected failure(error: unknown): Error {
+    if (error instanceof MemoryServerError && error.status === null)
+      return new Error(
+        "Atlas response validation failed: the SDK could not parse the server response. Check SDK/server schema compatibility. Response body omitted."
+      )
+    if (error instanceof MemoryConnectionError)
+      return new Error(
+        "Atlas connection failed: the SDK could not complete the request. Check service connectivity and timeouts; resume with the same manifest."
+      )
     if (error instanceof MemoryAPIError)
       return new Error(
-        `Atlas request failed (HTTP ${error.status ?? "network"}). Check authentication, provisioning and server logs; resume with the same manifest. Response body omitted.`
+        `Atlas request failed (HTTP ${error.status ?? "unknown"}). Check authentication, provisioning and server logs; resume with the same manifest. Response body omitted.`
       )
     if (
       (error instanceof Error && error.message.startsWith("Atlas")) ||
@@ -227,7 +242,12 @@ export class AtlasAgentEngineDirectProvider implements Provider {
       throw new Error("Atlas receipts are missing from the local manifest.")
     const complete = new Set<string>()
     const deadline = this.now() + TIMEOUT_MS
+    let poll = 0
     while (complete.size < wanted.size && this.now() < deadline) {
+      poll++
+      let checked = 0
+      const pendingAtStart = wanted.size - complete.size
+      let lastLog = this.now()
       for (const { s, w } of writes) {
         if (this.now() >= deadline) break
         if (complete.has(w.id!)) continue
@@ -236,12 +256,17 @@ export class AtlasAgentEngineDirectProvider implements Provider {
           episodeId: w.id,
           sessionId: s.remoteId,
         })
-        const hits = await this.memory.bind({ userId: scope }).searchEpisodes({
-          query: w.content.slice(0, 512),
-          sessionId: s.remoteId,
-          visibility: "private",
-          topK: 100,
-        })
+        const hits = await diagnose(
+          `[${this.name}] Episode search`,
+          { tag, episodeId: w.id, sessionId: s.remoteId, poll, checked, pendingAtStart },
+          () =>
+            this.memory.bind({ userId: scope }).searchEpisodes({
+              query: w.content.slice(0, 512),
+              sessionId: s.remoteId,
+              visibility: "private",
+              topK: 100,
+            })
+        )
         const searchable = hits.some((h) => h.id === w.id)
         logger.trace(`[${this.name}] Episode search completed`, {
           tag,
@@ -249,6 +274,27 @@ export class AtlasAgentEngineDirectProvider implements Provider {
           searchable,
         })
         if (searchable) complete.add(w.id!)
+        checked++
+        // Publish during the scan, including checks that found no searchable receipt.
+        progress?.({ completedIds: [...complete], failedIds: [], total: wanted.size })
+        if (
+          checked === 1 ||
+          checked % 10 === 0 ||
+          checked === pendingAtStart ||
+          this.now() - lastLog >= POLL_MS
+        ) {
+          logger.debug(`[${this.name}] Indexing scan progress`, {
+            tag,
+            poll,
+            checked,
+            pendingAtStart,
+            completed: complete.size,
+            total: wanted.size,
+            remaining: wanted.size - complete.size,
+            elapsedMs: this.now() - (deadline - TIMEOUT_MS),
+          })
+          lastLog = this.now()
+        }
       }
       logger.debug(`[${this.name}] Indexing poll`, {
         tag,

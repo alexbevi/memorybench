@@ -416,3 +416,66 @@ test("direct ingest diagnostics time writes and report reused receipts without c
     output.mockRestore()
   }
 })
+
+test("direct ingestion proceeds to indexing and search with null server embeddings", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  const result = await p.ingest([session], { containerTag: "null-embedding" })
+  f.episodes[0].embedding = null
+  await p.awaitIndexing(result, "null-embedding")
+  expect(await p.search("airport", { containerTag: "null-embedding" })).toHaveLength(1)
+})
+
+test("invalid search responses report validation errors without exposing response content", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  const result = await p.ingest([session], { containerTag: "invalid-embedding" })
+  f.episodes[0].embedding = "sensitive-invalid-value"
+  await expect(p.awaitIndexing(result, "invalid-embedding")).rejects.toThrow(
+    "response validation failed"
+  )
+  try {
+    await p.search("airport", { containerTag: "invalid-embedding" })
+    throw new Error("Expected search failure")
+  } catch (error) {
+    expect(String(error)).toContain("response validation failed")
+    expect(String(error)).not.toContain("sensitive-invalid-value")
+    expect(String(error)).not.toContain("HTTP network")
+  }
+})
+
+test("direct indexing publishes progress before the full episode scan finishes", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  const result = await p.ingest(
+    [session, { ...session, sessionId: "s2" }, { ...session, sessionId: "s3" }],
+    { containerTag: "incremental-index" }
+  )
+  const observed: { completed: number; searches: number }[] = []
+  await p.awaitIndexing(result, "incremental-index", (progress) => {
+    observed.push({
+      completed: progress.completedIds.length,
+      searches: f.requests.filter((r) => r.url.endsWith("/search")).length,
+    })
+  })
+  expect(observed[0]).toEqual({ completed: 1, searches: 1 })
+  expect(observed[1]).toEqual({ completed: 2, searches: 2 })
+  expect(observed.at(-1)).toEqual({ completed: 3, searches: 3 })
+})
+
+test("direct indexing reports checks even when episodes are not searchable", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  const result = await p.ingest([session, { ...session, sessionId: "s2" }], {
+    containerTag: "pending-index",
+  })
+  f.hide()
+  const observed: number[] = []
+  await expect(
+    p.awaitIndexing(result, "pending-index", (progress) => {
+      expect(progress.completedIds).toHaveLength(0)
+      observed.push(f.requests.filter((r) => r.url.endsWith("/search")).length)
+    })
+  ).rejects.toThrow("timed out")
+  expect(observed[0]).toBe(1)
+})
