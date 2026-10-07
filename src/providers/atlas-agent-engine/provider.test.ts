@@ -479,3 +479,45 @@ test("direct indexing reports checks even when episodes are not searchable", asy
   ).rejects.toThrow("timed out")
   expect(observed[0]).toBe(1)
 })
+
+test("direct readiness credits all returned receipts from the requested session", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  const result = await p.ingest(
+    [{ ...session, messages: Array.from({ length: 20 }, () => session.messages[0]) }],
+    { containerTag: "shared-hits" }
+  )
+  await p.awaitIndexing(result, "shared-hits")
+  expect(f.requests.filter((r) => r.url.endsWith("/search"))).toHaveLength(1)
+})
+
+test("readiness still queries missing hits and does not credit other sessions", async () => {
+  const f = await fixture()
+  let searches = 0
+  const p = new AtlasAgentEngineDirectProvider({
+    ...f.deps,
+    fetchImpl: async (url, init) => {
+      const response = await f.deps.fetchImpl(url, init)
+      if (!url.endsWith("/search")) return response
+      searches++
+      // Simulate a truncated first response containing an unrelated session's hit.
+      if (searches === 1) return Response.json({ memories: [f.episodes[0], f.episodes[2]] })
+      return response
+    },
+  })
+  await p.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  const result = await p.ingest(
+    [
+      { ...session, messages: [session.messages[0], session.messages[0]] },
+      { ...session, sessionId: "s2" },
+    ],
+    { containerTag: "partial-hits" }
+  )
+  const completed: number[] = []
+  await p.awaitIndexing(result, "partial-hits", (progress) =>
+    completed.push(progress.completedIds.length)
+  )
+  expect(completed[0]).toBe(1)
+  expect(searches).toBe(3)
+  expect(completed.at(-1)).toBe(3)
+})

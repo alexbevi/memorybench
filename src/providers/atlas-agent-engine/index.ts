@@ -240,6 +240,7 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     )
     if (writes.length !== wanted.size)
       throw new Error("Atlas receipts are missing from the local manifest.")
+    const expectedSession = new Map(writes.map(({ s, w }) => [w.id!, s.remoteId]))
     const complete = new Set<string>()
     const deadline = this.now() + TIMEOUT_MS
     let poll = 0
@@ -273,13 +274,18 @@ export class AtlasAgentEngineDirectProvider implements Provider {
           episodeId: w.id,
           searchable,
         })
-        if (searchable) complete.add(w.id!)
+        // Every returned receipt is evidence of searchability, not only the query's target.
+        // Restrict credit to receipts expected in this session and this ingest result.
+        for (const hit of hits) {
+          if (expectedSession.get(hit.id) === s.remoteId) complete.add(hit.id)
+        }
         checked++
         // Publish during the scan, including checks that found no searchable receipt.
         progress?.({ completedIds: [...complete], failedIds: [], total: wanted.size })
         if (
           checked === 1 ||
           checked % 10 === 0 ||
+          complete.size === wanted.size ||
           checked === pendingAtStart ||
           this.now() - lastLog >= POLL_MS
         ) {
