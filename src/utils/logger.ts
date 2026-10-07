@@ -1,6 +1,7 @@
-type LogLevel = "debug" | "info" | "warn" | "error"
+type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 
 const COLORS = {
+  trace: "\x1b[90m",
   debug: "\x1b[90m",
   info: "\x1b[36m",
   warn: "\x1b[33m",
@@ -9,15 +10,23 @@ const COLORS = {
   green: "\x1b[32m",
 }
 
-class Logger {
+export class Logger {
   private level: LogLevel = "info"
+
+  setVerbosity(verbosity: number) {
+    this.setLevel(verbosity >= 2 ? "trace" : verbosity >= 1 ? "debug" : "info")
+  }
+
+  get verbose(): boolean {
+    return this.shouldLog("debug")
+  }
 
   setLevel(level: LogLevel) {
     this.level = level
   }
 
   private shouldLog(level: LogLevel): boolean {
-    const levels: LogLevel[] = ["debug", "info", "warn", "error"]
+    const levels: LogLevel[] = ["trace", "debug", "info", "warn", "error"]
     return levels.indexOf(level) >= levels.indexOf(this.level)
   }
 
@@ -26,6 +35,10 @@ class Logger {
     const color = COLORS[level]
     const metaStr = meta ? ` ${JSON.stringify(meta)}` : ""
     return `${COLORS.reset}[${timestamp}] ${color}${level.toUpperCase()}${COLORS.reset} ${message}${metaStr}`
+  }
+
+  trace(message: string, meta?: Record<string, unknown>) {
+    if (this.shouldLog("trace")) console.log(this.format("trace", message, meta))
   }
 
   debug(message: string, meta?: Record<string, unknown>) {
@@ -49,6 +62,10 @@ class Logger {
   }
 
   progress(current: number, total: number, message: string) {
+    if (this.verbose || !process.stdout.isTTY) {
+      this.info(`${message} (${current}/${total})`)
+      return
+    }
     const percent = Math.round((current / total) * 100)
     const bar = "█".repeat(Math.floor(percent / 5)) + "░".repeat(20 - Math.floor(percent / 5))
     process.stdout.write(`\r${COLORS.info}[${bar}]${COLORS.reset} ${percent}% ${message}`)

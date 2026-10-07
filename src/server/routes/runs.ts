@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger"
 import { existsSync, readFileSync, readdirSync } from "fs"
 import { join } from "path"
 import { CheckpointManager } from "../../orchestrator/checkpoint"
@@ -181,7 +182,11 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
   if (method === "POST" && pathname === "/api/runs/start") {
     try {
       const body = await req.json()
-      console.log("[API] Start run request body:", JSON.stringify(body, null, 2))
+      logger.trace("[API] Start run request", {
+        provider: body.provider,
+        benchmark: body.benchmark,
+        runId: body.runId,
+      })
       const {
         provider,
         benchmark,
@@ -195,8 +200,8 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
         fromPhase,
         sourceRunId,
       } = body
-      console.log("[API] Extracted sampling:", sampling)
-      console.log("[API] Extracted concurrency:", concurrency)
+      logger.debug("[API] Sampling", { sampling })
+      logger.debug("[API] Concurrency", { concurrency })
 
       if (!provider || !benchmark || !runId || !judgeModel) {
         return json(

@@ -60,9 +60,13 @@ class IndexingProgressTracker {
 
   display(): void {
     const agg = this.getAggregated()
-    const displayStr = `${agg.completed}/${agg.total}`
+    const displayStr = `${agg.completed}/${agg.total}/${agg.failed}`
     if (displayStr !== this.lastDisplayed) {
       this.lastDisplayed = displayStr
+      if (logger.verbose || !process.stdout.isTTY) {
+        logger.info(`Indexing: ${agg.completed}/${agg.total} episodes (${agg.failed} failed)`)
+        return
+      }
       const percent = agg.total > 0 ? Math.round((agg.completed / agg.total) * 100) : 0
       const bar = "█".repeat(Math.floor(percent / 5)) + "░".repeat(20 - Math.floor(percent / 5))
       const failedStr = agg.failed > 0 ? ` (${agg.failed} failed)` : ""
@@ -73,6 +77,10 @@ class IndexingProgressTracker {
   }
 
   finish(): void {
+    if (logger.verbose || !process.stdout.isTTY) {
+      this.display()
+      return
+    }
     const agg = this.getAggregated()
     const failedStr = agg.failed > 0 ? ` (${agg.failed} failed)` : ""
     process.stdout.write(
@@ -145,6 +153,17 @@ export async function runIndexingPhase(
         startedAt: new Date().toISOString(),
       })
 
+      logger.debug(`[indexing] Started ${question.questionId}`, {
+        containerTag: question.containerTag,
+        episodes: episodeCount,
+      })
+      let lastUpdate = startTime
+      const heartbeat = setInterval(() => {
+        logger.debug(`[indexing] Still waiting for ${question.questionId}`, {
+          elapsedMs: Date.now() - startTime,
+          sinceLastProgressMs: Date.now() - lastUpdate,
+        })
+      }, 10000)
       try {
         let lastProgress: IndexingProgress = {
           completedIds: [],
@@ -153,6 +172,7 @@ export async function runIndexingPhase(
         }
 
         await provider.awaitIndexing(ingestResult, question.containerTag, (progress) => {
+          lastUpdate = Date.now()
           lastProgress = progress
           tracker.update(question.questionId, progress)
 
@@ -172,6 +192,7 @@ export async function runIndexingPhase(
           durationMs,
         })
 
+        logger.debug(`[indexing] Completed ${question.questionId}`, { durationMs })
         return { questionId: question.questionId, durationMs }
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e)
@@ -183,6 +204,8 @@ export async function runIndexingPhase(
         throw new Error(
           `Indexing failed at ${question.questionId}: ${error}. Fix the issue and resume with the same run ID.`
         )
+      } finally {
+        clearInterval(heartbeat)
       }
     }
   )

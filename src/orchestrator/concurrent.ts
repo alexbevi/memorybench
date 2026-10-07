@@ -60,6 +60,10 @@ export class ConcurrentExecutor {
       const batchEnd = Math.min(batchStart + batchSize, items.length)
       const batch = items.slice(batchStart, batchEnd)
 
+      logger.debug(`[${phaseName}] Starting batch ${batchIdx + 1}/${totalBatches}`, {
+        runId,
+        items: batch.length,
+      })
       onBatchStart?.(batchIdx, batch.length)
 
       const batchPromises = batch.map(async (item, batchOffset) => {
@@ -91,6 +95,7 @@ export class ConcurrentExecutor {
       const successfulResults = batchResults.filter((r) => r.success).map((r) => r.result as R)
 
       allResults.push(...successfulResults)
+      logger.debug(`[${phaseName}] Completed batch ${batchIdx + 1}/${totalBatches}`, { runId })
       onBatchComplete?.(batchIdx, successfulResults)
 
       if (batchIdx < totalBatches - 1 && rateLimitMs > 0) {

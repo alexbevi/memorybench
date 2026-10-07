@@ -1,3 +1,5 @@
+import { logger } from "../utils/logger"
+import { parseVerbosity } from "./verbosity"
 import { runCommand } from "./commands/run"
 import { compareCommand } from "./commands/compare"
 import { ingestCommand } from "./commands/ingest"
@@ -44,6 +46,8 @@ Options:
   -r, --run-id           Run identifier
   -m, --answering-model  Answering model (default: ${DEFAULT_ANSWERING_MODEL})
   -q, --question-id      Question ID (for test command)
+  -v, --verbose         Debug logs, including indexing waits
+  -vv                   Trace logs, including individual readiness checks (higher counts use trace)
   --force                Clear checkpoint and start fresh
 
 Run 'bun run src/index.ts help <topic>' for more details:
@@ -159,8 +163,10 @@ Usage:
 }
 
 export async function cli(args: string[]): Promise<void> {
-  const command = args[0]
-  const commandArgs = args.slice(1)
+  const parsed = parseVerbosity(args)
+  logger.setVerbosity(parsed.verbosity)
+  const command = parsed.args[0]
+  const commandArgs = parsed.args.slice(1)
 
   switch (command) {
     case "run":

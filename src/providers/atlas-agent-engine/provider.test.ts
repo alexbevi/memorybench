@@ -1,4 +1,5 @@
-import { afterEach, expect, test } from "bun:test"
+import { logger } from "../../utils/logger"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -369,4 +370,26 @@ test("turn replay reuses the SDK idempotency key after an uncertain response", a
   expect(keys[0]).toHaveLength(64)
   expect(keys[1]).toBe(keys[0])
   expect(f.episodes).toHaveLength(1)
+})
+
+test("verbose readiness logs explain grace and stability waits without transcript content", async () => {
+  const f = await fixture()
+  const p = new AtlasAgentEngineProvider(f.deps)
+  await p.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  const result = await p.ingest([session], { containerTag: "diagnostic-run" })
+  const output = spyOn(console, "log").mockImplementation(() => {})
+  logger.setVerbosity(2)
+  try {
+    await p.awaitIndexing(result, "diagnostic-run")
+    const logs = output.mock.calls.flat().join("\n")
+    expect(logs).toContain('"grace":1')
+    expect(logs).toContain('"stability":1')
+    expect(logs).toContain("Checking session searchability")
+    expect(logs).toContain('"searchable":true')
+    expect(logs).toContain("Readiness checks passed")
+    expect(logs).not.toContain("Source date:")
+  } finally {
+    logger.setVerbosity(0)
+    output.mockRestore()
+  }
 })

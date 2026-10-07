@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger"
 import { Memory, MemoryAPIError, type FetchLike } from "@mongodb-js/agent-engine-sdk-memory"
 import type {
   Provider,
@@ -154,7 +155,14 @@ export class AtlasAgentEngineDirectProvider implements Provider {
   }
   async awaitIndexing(result: IngestResult, tag: string, progress?: IndexingProgressCallback) {
     try {
+      logger.debug(`[${this.name}] Awaiting readiness`, {
+        tag,
+        receipts: result.documentIds?.length ?? 0,
+        pollMs: POLL_MS,
+        timeoutMs: TIMEOUT_MS,
+      })
       await this.waitForReadiness(result, tag, progress)
+      logger.debug(`[${this.name}] Readiness checks passed`, { tag })
     } catch (error) {
       throw this.failure(error)
     }
@@ -178,14 +186,31 @@ export class AtlasAgentEngineDirectProvider implements Provider {
       for (const { s, w } of writes) {
         if (this.now() >= deadline) break
         if (complete.has(w.id!)) continue
+        logger.trace(`[${this.name}] Checking episode searchability`, {
+          tag,
+          episodeId: w.id,
+          sessionId: s.remoteId,
+        })
         const hits = await this.memory.bind({ userId: scope }).searchEpisodes({
           query: w.content.slice(0, 512),
           sessionId: s.remoteId,
           visibility: "private",
           topK: 100,
         })
-        if (hits.some((h) => h.id === w.id)) complete.add(w.id!)
+        const searchable = hits.some((h) => h.id === w.id)
+        logger.trace(`[${this.name}] Episode search completed`, {
+          tag,
+          episodeId: w.id,
+          searchable,
+        })
+        if (searchable) complete.add(w.id!)
       }
+      logger.debug(`[${this.name}] Indexing poll`, {
+        tag,
+        completed: complete.size,
+        total: wanted.size,
+        remainingMs: Math.max(0, deadline - this.now()),
+      })
       progress?.({ completedIds: [...complete], failedIds: [], total: wanted.size })
       if (complete.size < wanted.size) await this.sleep(POLL_MS)
     }
@@ -255,20 +280,46 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
     const known = new Set(sessions.flatMap((s) => s.writes.flatMap((w) => (w.id ? [w.id] : []))))
     if ([...wanted].some((id) => !known.has(id)))
       throw new Error("Atlas turn receipts are missing from the local manifest.")
+    logger.debug(
+      `[${this.name}] Readiness requires 180s after the last write, searchable episodes, and 60s of unchanged episodes`,
+      { tag, sessions: sessions.length }
+    )
     const stability = new Map<string, { fingerprint: string; since: number }>()
     const deadline = this.now() + TIMEOUT_MS
     while (this.now() < deadline) {
       const completedIds: string[] = []
+      const waiting = { grace: 0, episodes: 0, search: 0, stability: 0 }
+      let maxGraceRemainingMs = 0
       for (const session of sessions) {
         if (this.now() >= deadline) break
-        if (this.now() - session.lastWrite < 180000) continue
+        const graceRemainingMs = Math.max(0, 180000 - (this.now() - session.lastWrite))
+        if (graceRemainingMs > 0) {
+          waiting.grace++
+          maxGraceRemainingMs = Math.max(maxGraceRemainingMs, graceRemainingMs)
+          logger.trace(`[${this.name}] Session waiting after last write`, {
+            tag,
+            sessionId: session.remoteId,
+            remainingMs: graceRemainingMs,
+          })
+          continue
+        }
         const memory = this.memory.bind({ userId: scope })
+        logger.trace(`[${this.name}] Listing session episodes`, {
+          tag,
+          sessionId: session.remoteId,
+        })
         const entries = (await memory.listEpisodes({
           sessionId: session.remoteId,
           visibility: "private",
           limit: 1000,
         })) as { id?: string; content?: string }[]
+        logger.trace(`[${this.name}] Session episodes returned`, {
+          tag,
+          sessionId: session.remoteId,
+          count: entries.length,
+        })
         if (!entries.length || entries.length >= 1000 || entries.some((e) => !e.id || !e.content)) {
+          waiting.episodes++
           stability.delete(session.remoteId)
           continue
         }
@@ -280,21 +331,48 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
         const previous = stability.get(session.remoteId)
         if (previous?.fingerprint !== fingerprint)
           stability.set(session.remoteId, { fingerprint, since: this.now() })
+        logger.trace(`[${this.name}] Checking session searchability`, {
+          tag,
+          sessionId: session.remoteId,
+        })
         const hits = await memory.searchEpisodes({
           query: entries[0].content!.slice(0, 512),
           sessionId: session.remoteId,
           visibility: "private",
           topK: 100,
         })
-        if (!hits.some((h) => entries.some((e) => e.id === h.id))) {
+        const searchable = hits.some((h) => entries.some((e) => e.id === h.id))
+        logger.trace(`[${this.name}] Session search completed`, {
+          tag,
+          sessionId: session.remoteId,
+          searchable,
+        })
+        if (!searchable) {
+          waiting.search++
           stability.delete(session.remoteId)
           continue
         }
-        if (this.now() - stability.get(session.remoteId)!.since >= 60000)
+        const stableMs = this.now() - stability.get(session.remoteId)!.since
+        logger.trace(`[${this.name}] Session stability`, {
+          tag,
+          sessionId: session.remoteId,
+          stableMs,
+          requiredMs: 60000,
+        })
+        if (stableMs < 60000) waiting.stability++
+        if (stableMs >= 60000)
           completedIds.push(
             ...session.writes.flatMap((w) => (w.id && wanted.has(w.id) ? [w.id] : []))
           )
       }
+      logger.debug(`[${this.name}] Readiness poll`, {
+        tag,
+        completed: completedIds.length,
+        total: wanted.size,
+        waiting,
+        maxGraceRemainingMs,
+        remainingMs: Math.max(0, deadline - this.now()),
+      })
       progress?.({ completedIds, failedIds: [], total: wanted.size })
       if (completedIds.length === wanted.size) return
       await this.sleep(POLL_MS)

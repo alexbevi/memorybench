@@ -70,6 +70,29 @@ GOOGLE_API_KEY=
 | `serve` | Start web UI |
 | `help` | Show help (`help providers`, `help models`, `help benchmarks`) |
 
+### Logging
+
+Add `-v` for debug logs or `-vv` for trace logs. Repeated `-v` or `--verbose`
+flags also work, before or after the command. Counts above two use trace.
+The default level is info.
+
+```bash
+bun run src/index.ts serve -v
+bun run src/index.ts run -p atlas-agent-engine -b locomo -j gpt-5-mini -vv
+```
+
+For UI-started runs, set verbosity when starting `serve`. Restart the server to
+change it. Debug logs show batches, active indexing questions, elapsed waits,
+and Atlas polling summaries. Trace adds individual session and episode readiness
+checks without logging transcript content or credentials. Verbose progress uses
+separate lines so diagnostics do not overwrite the progress bar.
+
+Atlas extraction readiness waits at least 180 seconds after a session's last
+write, then requires searchable episodes to remain unchanged for 60 seconds.
+Debug polls distinguish that initial wait from missing episodes, unsearchable
+episodes, and the stability wait. These checks infer readiness; they are not a
+server extraction-complete signal.
+
 ## Options
 
 ```
