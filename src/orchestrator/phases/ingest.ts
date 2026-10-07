@@ -1,3 +1,4 @@
+import { diagnose } from "../../utils/diagnostics"
 import type { Provider, IngestResult } from "../../types/provider"
 import type { Benchmark } from "../../types/benchmark"
 import type { RunCheckpoint } from "../../types/checkpoint"
@@ -57,6 +58,12 @@ export async function runIngestPhase(
         startedAt: new Date().toISOString(),
       })
 
+      const context = { runId: checkpoint.runId, questionId: question.questionId, containerTag }
+      logger.debug("[ingest] Question started", {
+        ...context,
+        sessions: sessions.length,
+        messages: sessions.reduce((sum, s) => sum + s.messages.length, 0),
+      })
       try {
         const previous = checkpoint.questions[question.questionId].phases.ingest
         const completedSessions = [...previous.completedSessions]
@@ -70,7 +77,17 @@ export async function runIngestPhase(
             continue
           }
 
-          const result = await provider.ingest([session], { containerTag })
+          const sessionContext = {
+            ...context,
+            sessionId: session.sessionId,
+            messages: session.messages.length,
+            completedSessions: completedSessions.length,
+            totalSessions: sessions.length,
+          }
+          logger.debug("[ingest] Uploading session", sessionContext)
+          const result = await diagnose("[ingest] Provider session upload", sessionContext, () =>
+            provider.ingest([session], { containerTag })
+          )
 
           combinedResult.documentIds = [
             ...new Set([...combinedResult.documentIds, ...result.documentIds]),
@@ -85,7 +102,14 @@ export async function runIngestPhase(
             ingestResult: structuredClone(combinedResult),
           })
           // Persist the receipt with the session before moving to the next remote write.
-          await checkpointManager.flush(checkpoint.runId)
+          await diagnose("[ingest] Flush checkpoint", sessionContext, () =>
+            checkpointManager.flush(checkpoint.runId)
+          )
+          logger.debug("[ingest] Session checkpoint saved", {
+            ...sessionContext,
+            completedSessions: completedSessions.length,
+            receipts: combinedResult.documentIds.length,
+          })
         }
 
         if (combinedResult.taskIds && combinedResult.taskIds.length === 0) {

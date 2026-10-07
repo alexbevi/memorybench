@@ -82,9 +82,13 @@ bun run src/index.ts run -p atlas-agent-engine -b locomo -j gpt-5-mini -vv
 ```
 
 For UI-started runs, set verbosity when starting `serve`. Restart the server to
-change it. Debug logs show batches, active indexing questions, elapsed waits,
+change it. Debug logs show ingestion session counts, written and reused receipts, batches, active indexing questions, elapsed waits,
 and Atlas polling summaries. Trace adds individual session and episode readiness
-checks without logging transcript content or credentials. Verbose progress uses
+checks and ingestion operation durations without logging transcript content or credentials.
+During ingestion, a 10-second heartbeat identifies the active session and any
+slow remote write or local manifest operation. Trace logs separate manifest reads,
+pending-write saves, remote writes, and receipt saves. Container tags identify the
+question and run when several runs are active. Verbose progress uses
 separate lines so diagnostics do not overwrite the progress bar.
 
 Atlas extraction readiness waits at least 180 seconds after a session's last

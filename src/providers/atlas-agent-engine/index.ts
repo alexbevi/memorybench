@@ -1,3 +1,4 @@
+import { diagnose } from "../../utils/diagnostics"
 import { logger } from "../../utils/logger"
 import { Memory, MemoryAPIError, type FetchLike } from "@mongodb-js/agent-engine-sdk-memory"
 import type {
@@ -97,8 +98,13 @@ export class AtlasAgentEngineDirectProvider implements Provider {
   }
   async ingest(sessions: UnifiedSession[], options: IngestOptions): Promise<IngestResult> {
     const scope = this.scope(options.containerTag)
+    const context = { provider: this.name, tag: options.containerTag }
+    logger.trace("[atlas ingest] Acquiring manifest lock", context)
     return this.store.lock(scope, async () => {
-      const state = await this.store.read(scope, this.connection)
+      logger.trace("[atlas ingest] Manifest lock acquired", context)
+      const state = await diagnose("[atlas ingest] Read manifest", context, () =>
+        this.store.read(scope, this.connection)
+      )
       const documentIds: string[] = []
       for (const input of sessions) {
         const key = digest(input.sessionId)
@@ -106,20 +112,51 @@ export class AtlasAgentEngineDirectProvider implements Provider {
         const session = (state.sessions[key] ??= prepared)
         if (session.fingerprint !== prepared.fingerprint)
           throw new Error("Atlas source session changed; use a new run ID.")
-        for (const entry of session.writes) {
+        const sessionStarted = Date.now()
+        const sessionContext = {
+          ...context,
+          sessionId: input.sessionId,
+          remoteSessionId: session.remoteId,
+        }
+        let reused = 0
+        let written = 0
+        logger.debug("[atlas ingest] Session started", {
+          ...sessionContext,
+          writes: session.writes.length,
+          acknowledged: session.writes.filter((w) => w.id).length,
+        })
+        for (const [writeIndex, entry] of session.writes.entries()) {
+          const writeContext = {
+            ...sessionContext,
+            write: writeIndex + 1,
+            totalWrites: session.writes.length,
+            contentBytes: Buffer.byteLength(entry.content),
+          }
           if (!entry.id) {
             const pending = entry.pending
             entry.pending = true
-            await this.store.save(scope, state)
+            await diagnose("[atlas ingest] Save pending manifest", writeContext, () =>
+              this.store.save(scope, state)
+            )
             try {
-              entry.id = await this.write(
-                this.memory.bind({ userId: scope, sessionId: session.remoteId }),
-                session,
-                { ...entry, pending }
+              entry.id = await diagnose(
+                pending
+                  ? "[atlas ingest] Reconcile or replay pending write"
+                  : "[atlas ingest] Remote write",
+                writeContext,
+                () =>
+                  this.write(
+                    this.memory.bind({ userId: scope, sessionId: session.remoteId }),
+                    session,
+                    { ...entry, pending }
+                  )
               )
               entry.pending = false
               session.lastWrite = this.now()
-              await this.store.save(scope, state)
+              await diagnose("[atlas ingest] Save receipt manifest", writeContext, () =>
+                this.store.save(scope, state)
+              )
+              written++
             } catch (error) {
               if (
                 !pending &&
@@ -132,9 +169,17 @@ export class AtlasAgentEngineDirectProvider implements Provider {
               }
               throw this.failure(error)
             }
+          } else {
+            reused++
           }
           documentIds.push(entry.id)
         }
+        logger.debug("[atlas ingest] Session completed", {
+          ...sessionContext,
+          written,
+          reused,
+          durationMs: Date.now() - sessionStarted,
+        })
       }
       return { documentIds: [...new Set(documentIds)] }
     })

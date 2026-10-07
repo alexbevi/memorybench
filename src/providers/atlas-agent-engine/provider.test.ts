@@ -393,3 +393,26 @@ test("verbose readiness logs explain grace and stability waits without transcrip
     output.mockRestore()
   }
 })
+
+test("direct ingest diagnostics time writes and report reused receipts without content", async () => {
+  const f = await fixture()
+  const p = await f.create()
+  const output = spyOn(console, "log").mockImplementation(() => {})
+  logger.setVerbosity(2)
+  try {
+    await p.ingest([session], { containerTag: "ingest-diagnostic" })
+    await p.ingest([session], { containerTag: "ingest-diagnostic" })
+    const logs = output.mock.calls.flat().join("\n")
+    expect(logs).toContain("Remote write started")
+    expect(logs).toContain("Remote write completed")
+    expect(logs).toContain("Save receipt manifest completed")
+    expect(logs).toContain('"written":1')
+    expect(logs).toContain('"reused":1')
+    expect(logs).toContain('"durationMs":')
+    expect(logs).not.toContain("Source date:")
+    expect(f.episodes).toHaveLength(1)
+  } finally {
+    logger.setVerbosity(0)
+    output.mockRestore()
+  }
+})
