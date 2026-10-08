@@ -75,10 +75,13 @@ bun run src/providers/mem0-local/validate.ts
 ```
 
 The wrapper explicitly loads the service `.env` regardless of the working
-directory. Running Compose from `self-hosted/mem0` without those settings previously
+directory and removes inherited overrides for the settings used by this Compose
+file. Edit `self-hosted/mem0/.env` to change these settings; command-prefix or
+exported values such as `OPENAI_BASE_URL=... ./compose.sh up` are intentionally
+ignored. Running Compose from `self-hosted/mem0` without those settings previously
 recreated the service with blank gateway headers and default OpenAI embeddings.
-The API stayed healthy but ingestion failed. Exported shell variables still
-override `.env` values; unset stale overrides before recreating the container.
+The API stayed healthy but ingestion failed. Raw `docker compose` commands still
+allow shell overrides, even with `--env-file`; use the wrapper for this service.
 The older `grove-gateway-prod.azure-api.net` Foundry route uses `api-key` instead.
 Keep its header paired with that route if you explicitly choose it.
 
@@ -223,6 +226,7 @@ request. Keep secrets and transcript contents out of shared diagnostics.
 ```sh
 bun test src/providers/mem0-local/provider.test.ts src/providers/mem0/input-parity.test.ts
 python3 -B self-hosted/mem0/server_config_test.py
+python3 -B self-hosted/mem0/compose_test.py
 self-hosted/mem0/compose.sh config --quiet
 bun x tsc --noEmit
 ```
