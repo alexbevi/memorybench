@@ -56,6 +56,10 @@ export interface SearchPhaseCheckpoint {
 }
 
 export interface AnswerPhaseCheckpoint {
+  generation?: {
+    finishReason?: string
+    usage?: import("ai").LanguageModelUsage
+  }
   status: PhaseStatus
   hypothesis?: string
   promptTokens?: number

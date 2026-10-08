@@ -73,3 +73,38 @@ test("answer phase ignores provider prompt overrides and persists the shared gen
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+test("blank answers retain diagnostics and legacy completed blanks are retried", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "answer-empty-"))
+  const manager = new CheckpointManager(directory)
+  const question = { questionId: "q", question: "Where?", groundTruth: "Paris", questionType: "single", haystackSessionIds: [] }
+  const benchmark: Benchmark = { name: "test", load: async () => {}, getQuestions: () => [question], getHaystackSessions: () => [], getGroundTruth: () => "Paris", getQuestionTypes: () => ({}) }
+  const checkpoint = manager.create("empty", "mem0", "test", "gpt-5-mini", "gpt-5-mini")
+  try {
+    manager.initQuestion(checkpoint, "q", "q-empty", question)
+    const resultFile = join(directory, "results.json")
+    writeFileSync(resultFile, JSON.stringify({ results: [] }))
+    manager.updatePhase(checkpoint, "q", "search", { status: "completed", resultFile })
+    const usage = { inputTokens: 10, outputTokens: 1000, totalTokens: 1010, reasoningTokens: 1000 }
+    await expect(runAnswerPhase(benchmark, checkpoint, manager, undefined, undefined,
+      async () => ({ text: "  ", finishReason: "length", usage })
+    )).rejects.toThrow("empty answer")
+    await manager.flush()
+    expect(manager.load("empty")!.questions.q.phases.answer).toMatchObject({
+      status: "failed", generation: { finishReason: "length", usage },
+      answerPolicy: { model: "gpt-5-mini" },
+    })
+    manager.updatePhase(checkpoint, "q", "answer", { status: "completed", hypothesis: "" })
+    let calls = 0
+    const generate = async () => { calls++; return { text: "Paris" } }
+    await runAnswerPhase(benchmark, checkpoint, manager, undefined, undefined, generate)
+    await runAnswerPhase(benchmark, checkpoint, manager, undefined, undefined, generate)
+    expect(calls).toBe(1)
+    expect(checkpoint.questions.q.phases.answer.status).toBe("completed")
+    expect(checkpoint.questions.q.phases.answer.error).toBeUndefined()
+    expect(checkpoint.questions.q.phases.answer.hypothesis).toBe("Paris")
+  } finally {
+    await manager.flush()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

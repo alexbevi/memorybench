@@ -52,7 +52,8 @@ export async function runAnswerPhase(
   provider?: Provider,
   generate: (
     options: Parameters<typeof generateText>[0]
-  ) => Promise<{ text: string }> = generateText
+  ) => Promise<Pick<Awaited<ReturnType<typeof generateText>>, "text"> &
+    Partial<Pick<Awaited<ReturnType<typeof generateText>>, "finishReason" | "usage">>> = generateText
 ): Promise<void> {
   const questions = benchmark.getQuestions()
   const targetQuestions = questionIds
@@ -64,7 +65,7 @@ export async function runAnswerPhase(
     const searchStatus = checkpointManager.getPhaseStatus(checkpoint, q.questionId, "search")
     const resultFile = checkpoint.questions[q.questionId]?.phases.search.resultFile
     return (
-      status !== "completed" && searchStatus === "completed" && resultFile && existsSync(resultFile)
+      (status !== "completed" || !checkpoint.questions[q.questionId]?.phases.answer.hypothesis?.trim()) && searchStatus === "completed" && resultFile && existsSync(resultFile)
     )
   })
 
@@ -91,6 +92,10 @@ export async function runAnswerPhase(
       const startTime = Date.now()
       checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {
         status: "in_progress",
+        error: undefined,
+        hypothesis: undefined,
+        generation: undefined,
+        completedAt: undefined,
         startedAt: new Date().toISOString(),
       })
 
@@ -101,13 +106,24 @@ export async function runAnswerPhase(
 
         const { prompt, settings, policy, promptTokens, basePromptTokens, contextTokens } =
           prepareAnswer(question.question, context, modelConfig, questionDate)
-        const { text } = await generate({
+        checkpoint.questions[question.questionId].phases.evaluate = { status: "pending" }
+        checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {
+          promptTokens, basePromptTokens, contextTokens, answerPolicy: policy,
+        })
+        const { text, finishReason, usage } = await generate({
           model: client(modelConfig.id),
           prompt,
           ...settings,
         })
 
         const durationMs = Date.now() - startTime
+        checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {
+          generation: { finishReason, usage },
+          durationMs,
+        })
+        if (!text.trim()) {
+          throw new Error(`Model returned an empty answer (finishReason: ${finishReason ?? "unknown"}). Retry the answer phase.`)
+        }
         checkpointManager.updatePhase(checkpoint, question.questionId, "answer", {
           status: "completed",
           hypothesis: text.trim(),
