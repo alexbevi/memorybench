@@ -59,11 +59,16 @@ export default function CompareDetailPage() {
         key: "status",
         header: "Status",
         render: (run) => {
+          const isQueued =
+            run.status === "pending" &&
+            compare?.execution === "sequential" &&
+            (compare.status === "running" || compare.status === "pending")
           const runIsActive =
-            run.status === "running" ||
-            run.status === "pending" ||
-            run.status === "initializing" ||
-            run.status === "stopping"
+            !isQueued &&
+            (run.status === "running" ||
+              run.status === "pending" ||
+              run.status === "initializing" ||
+              run.status === "stopping")
           const p = run.progress
           const total = p?.total || 0
           const phasesCompleted =
@@ -88,12 +93,22 @@ export default function CompareDetailPage() {
           const progressContent = (
             <div className="flex items-center gap-2">
               {runIsActive && <CircularProgress progress={progress} size={18} strokeWidth={2} />}
-              <span className={cn("badge", getStatusColor(run.status))}>{run.status}</span>
+              <span className={cn("badge", getStatusColor(run.status))}>
+                {isQueued ? "queued" : run.status}
+              </span>
               {runIsActive && total > 0 && (
                 <span className="text-text-muted text-xs font-mono">{phasesFullyComplete}/5</span>
               )}
             </div>
           )
+
+          if (isQueued) {
+            return (
+              <Tooltip content="Waiting for its turn. Providers run one at a time in this comparison.">
+                {progressContent}
+              </Tooltip>
+            )
+          }
 
           if (hasEpisodeData && runIsActive) {
             const episodeProgress =
