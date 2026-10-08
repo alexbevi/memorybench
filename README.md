@@ -197,6 +197,11 @@ Re-running same ID resumes. Use `--force` to restart.
 
 ## Extending
 
+For interpreting results and explaining provider comparisons, start with the
+[benchmark comparison guide](docs/benchmarks/README.md) and its
+[LoCoMo explainer](docs/benchmarks/locomo.md). A shared chapter template covers
+future LongMemEval and other benchmark write-ups.
+
 | Component | Guide |
 |-----------|-------|
 | Add Provider | [src/providers/README.md](src/providers/README.md) |
