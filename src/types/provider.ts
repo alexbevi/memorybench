@@ -33,7 +33,7 @@ export interface IndexingProgress {
 export type IndexingProgressCallback = (progress: IndexingProgress) => void
 
 export interface ReadinessPolicy {
-  method: "job-completion" | "searchable-receipts" | "stability-heuristic"
+  method: "job-completion" | "searchable-receipts" | "stability-heuristic" | "synchronous-response"
   extractionCompletionConfirmed: boolean
 }
 
@@ -56,6 +56,7 @@ export interface Provider {
 export type ProviderName =
   | "supermemory"
   | "mem0"
+  | "mem0-local"
   | "zep"
   | "filesystem"
   | "rag"

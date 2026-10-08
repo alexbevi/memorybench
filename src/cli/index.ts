@@ -70,6 +70,9 @@ Available providers for storing and retrieving memories:
   mem0           Mem0.ai - Memory layer for AI applications
                  Requires: MEM0_API_KEY
 
+  mem0-local     Standalone Mem0 REST API (default http://localhost:8888)
+                 Optional: MEM0_LOCAL_BASE_URL, MEM0_LOCAL_API_KEY
+
   zep            Zep - Long-term memory for AI assistants
                  Requires: ZEP_API_KEY
 

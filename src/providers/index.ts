@@ -2,6 +2,7 @@ import type { Provider, ProviderName } from "../types/provider"
 import type { ConcurrencyConfig } from "../types/concurrency"
 import { SupermemoryProvider } from "./supermemory"
 import { Mem0Provider } from "./mem0"
+import { Mem0LocalProvider } from "./mem0-local"
 import { ZepProvider } from "./zep"
 import { FilesystemProvider } from "./filesystem"
 import { RAGProvider } from "./rag"
@@ -11,6 +12,7 @@ import { AtlasAgentEngineProvider, AtlasAgentEngineDirectProvider } from "./atla
 const providers: Record<ProviderName, new () => Provider> = {
   supermemory: SupermemoryProvider,
   mem0: Mem0Provider,
+  "mem0-local": Mem0LocalProvider,
   zep: ZepProvider,
   filesystem: FilesystemProvider,
   rag: RAGProvider,

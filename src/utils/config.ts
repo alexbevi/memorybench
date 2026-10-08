@@ -32,6 +32,11 @@ export function getProviderConfig(provider: string): ProviderConfig {
       return { apiKey: config.supermemoryApiKey, baseUrl: config.supermemoryBaseUrl }
     case "mem0":
       return { apiKey: config.mem0ApiKey }
+    case "mem0-local":
+      return {
+        apiKey: process.env.MEM0_LOCAL_API_KEY || "",
+        baseUrl: process.env.MEM0_LOCAL_BASE_URL || "http://localhost:8888",
+      }
     case "zep":
       return { apiKey: config.zepApiKey }
     case "filesystem":
