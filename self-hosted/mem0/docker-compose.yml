@@ -8,6 +8,8 @@
 # Optional authentication: set MEM0_API_KEY and send it in the X-API-Key header.
 # Uses OpenAI by default; OPENAI_BASE_URL can select an OpenAI-compatible gateway.
 # Models: gpt-4.1-nano-2025-04-14 and text-embedding-3-small.
+# Gateways requiring a key header: set MEM0_MODEL_API_KEY_HEADER=api-key.
+# Its value comes from OPENAI_API_KEY; the normal bearer header remains present.
 # Mem0 v1.0.11 is pinned to preserve the guide's three-service architecture.
 # Graph extraction defaults off for parity with the cloud adapter.
 # Set MEM0_GRAPH_ENABLED=true to measure graph-enabled ingestion separately.
@@ -42,7 +44,7 @@ services:
             "rank-bm25==0.2.2"
         COPY main.py /app/main.py
         # Fail the build if the pinned upstream initialization point changes.
-        RUN python -c "from pathlib import Path; p = Path('/app/main.py'); s = p.read_text(); old = 'MEMORY_INSTANCE = Memory.from_config(DEFAULT_CONFIG)'; assert s.count(old) == 1; p.write_text(s.replace(old, 'from memorybench_config import configure\nMEMORY_INSTANCE = Memory.from_config(configure(DEFAULT_CONFIG))'))"
+        RUN python -c "from pathlib import Path; p = Path('/app/main.py'); s = p.read_text(); old = 'MEMORY_INSTANCE = Memory.from_config(DEFAULT_CONFIG)'; assert s.count(old) == 1; p.write_text(s.replace(old, 'from memorybench_config import create_memory\nMEMORY_INSTANCE = create_memory(DEFAULT_CONFIG)'))"
         RUN mkdir -p /app/history
         EXPOSE 8000
         CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -67,6 +69,7 @@ services:
       # container. On Docker Desktop, use host.docker.internal for a host gateway.
       # Apply changes with docker compose up -d; restart alone keeps old env vars.
       OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+      MEM0_MODEL_API_KEY_HEADER: "${MEM0_MODEL_API_KEY_HEADER:-}"
       ADMIN_API_KEY: "${MEM0_API_KEY:-}"
       MEM0_TELEMETRY: "false"
       MEM0_GRAPH_ENABLED: "${MEM0_GRAPH_ENABLED:-false}"

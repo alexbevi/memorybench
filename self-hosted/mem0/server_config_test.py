@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location("server_config", Path(__file__).with_name("server_config.py"))
 server_config = importlib.util.module_from_spec(spec)
@@ -11,6 +12,34 @@ spec.loader.exec_module(server_config)
 
 
 class ServerConfigTest(unittest.TestCase):
+    def test_gateway_header_reaches_vector_and_graph_model_clients(self):
+        calls = []
+
+        class Client:
+            def with_options(self, **kwargs):
+                calls.append(kwargs)
+                return self
+
+        component = lambda: SimpleNamespace(client=Client())
+        memory = SimpleNamespace(
+            llm=component(), embedding_model=component(), enable_graph=True,
+            graph=SimpleNamespace(llm=component(), embedding_model=component()),
+        )
+        with patch.dict(os.environ, {"MEM0_MODEL_API_KEY_HEADER": "api-key", "OPENAI_API_KEY": "test-key"}):
+            self.assertIs(server_config.configure_gateway(memory), memory)
+        self.assertEqual(calls, [{"default_headers": {"api-key": "test-key"}}] * 4)
+
+    def test_gateway_header_is_opt_in_and_validated(self):
+        memory = object()
+        with patch.dict(os.environ, {"MEM0_MODEL_API_KEY_HEADER": ""}):
+            self.assertIs(server_config.configure_gateway(memory), memory)
+        with patch.dict(os.environ, {"MEM0_MODEL_API_KEY_HEADER": "bad\nheader"}):
+            with self.assertRaises(ValueError):
+                server_config.configure_gateway(memory)
+        with patch.dict(os.environ, {"MEM0_MODEL_API_KEY_HEADER": "api-key", "OPENAI_API_KEY": ""}):
+            with self.assertRaises(ValueError):
+                server_config.configure_gateway(memory)
+
     def test_defaults_disable_graph_and_preserve_storage_models_and_auth(self):
         defaults = {
             "graph_store": {"provider": "neo4j"},

@@ -20,8 +20,13 @@ startup module and shared extraction instructions, so retain the repository layo
 `OPENAI_API_KEY` and `OPENAI_BASE_URL` configure the server's extraction and
 embedding clients. The endpoint must accept OpenAI-style bearer authentication,
 chat completions with JSON output, and embeddings. Changing the endpoint does not
-change the configured model names. A gateway requiring an additional subscription
-header needs separate server-side support; `MEM0_LOCAL_API_KEY` does not supply it.
+change the configured model names. If your gateway requires the existing model
+credential in an additional header, set `MEM0_MODEL_API_KEY_HEADER=api-key`, or
+the header name specified by that gateway, before recreating the API container.
+The server sends the value of `OPENAI_API_KEY` in that header for extraction and
+embedding clients, including graph clients when enabled. Normal bearer
+authentication remains present. Leave this setting empty for direct OpenAI use.
+`MEM0_LOCAL_API_KEY` controls authentication to mem0 and does not supply this header.
 
 ## Connect MemoryBench
 
