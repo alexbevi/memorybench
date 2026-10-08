@@ -66,11 +66,11 @@ export const LOCOMO_QUESTION_TYPES: QuestionTypeRegistry = {
   },
 }
 
-const CATEGORY_TO_TYPE: Record<number, string> = {
-  1: "single-hop",
-  2: "multi-hop",
-  3: "temporal",
-  4: "world-knowledge",
+export const CATEGORY_TO_TYPE: Record<number, string> = {
+  1: "multi-hop",
+  2: "temporal",
+  3: "world-knowledge",
+  4: "single-hop",
   5: "adversarial",
 }
 
@@ -130,7 +130,7 @@ export class LoCoMoBenchmark implements Benchmark {
           questionId,
           question: qa.question,
           questionType,
-          groundTruth: String(qa.answer),
+          groundTruth: qa.category === 5 ? "Not mentioned in the conversation" : String(qa.answer),
           haystackSessionIds: sessionIds,
           metadata: {
             sampleId: item.sample_id,
