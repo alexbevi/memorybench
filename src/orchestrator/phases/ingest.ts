@@ -87,9 +87,27 @@ export async function runIngestPhase(
             totalSessions: sessions.length,
           }
           logger.debug("[ingest] Uploading session", sessionContext)
-          const result = await diagnose("[ingest] Provider session upload", sessionContext, () =>
-            provider.ingest([session], { containerTag })
-          )
+          const uploadStart = performance.now()
+          const uploads = checkpoint.questions[question.questionId].phases.ingest.uploads ?? []
+          const recordUpload = (outcome: "accepted" | "failed") => {
+            uploads.push({
+              attempt: Math.max(0, (checkpoint.operationalAttempts?.length ?? 1) - 1),
+              durationMs: performance.now() - uploadStart,
+              outcome,
+              messages: session.messages.length,
+            })
+            checkpointManager.updatePhase(checkpoint, question.questionId, "ingest", { uploads })
+          }
+          let result: IngestResult
+          try {
+            result = await diagnose("[ingest] Provider session upload", sessionContext, () =>
+              provider.ingest([session], { containerTag })
+            )
+            recordUpload("accepted")
+          } catch (error) {
+            recordUpload("failed")
+            throw error
+          }
 
           combinedResult.documentIds = [
             ...new Set([...combinedResult.documentIds, ...result.documentIds]),

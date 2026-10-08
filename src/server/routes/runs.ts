@@ -1,3 +1,4 @@
+import { operationalSummary } from "../../orchestrator/operations"
 import { estimateWorkload } from "../../orchestrator/workload"
 import { backlogPolicy, type BacklogPolicy } from "../../orchestrator/admission"
 import { selectQuestionsBySampling } from "../../orchestrator/sampling"
@@ -102,6 +103,7 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
     const summary = checkpointManager.getSummary(checkpoint)
     return json({
       ...checkpoint,
+      operational: operationalSummary(checkpoint),
       cancellationCapabilities,
       status: getRunStatus(checkpoint, summary),
       summary,

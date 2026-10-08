@@ -1,3 +1,4 @@
+import { operationalSummary } from "../operations"
 import { writeFileSync, mkdirSync, existsSync } from "fs"
 import { join } from "path"
 import type { Benchmark } from "../../types/benchmark"
@@ -260,6 +261,7 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
     judge: checkpoint.judge,
     answeringModel: checkpoint.answeringModel,
     timestamp: new Date().toISOString(),
+    operational: operationalSummary(checkpoint),
     readinessPolicy: checkpoint.readinessPolicy,
     searchMeasurement: checkpoint.searchMeasurement,
     provenance: checkpoint.provenance,

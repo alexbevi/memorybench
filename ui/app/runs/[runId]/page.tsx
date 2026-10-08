@@ -1,5 +1,6 @@
 "use client"
 
+import { OperationalProgress } from "@/components/operational-progress"
 import { QueueHealth } from "@/components/queue-health"
 
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -312,6 +313,7 @@ export default function RunDetailPage() {
           {Math.round(run.admission.waitMs / 1000)}s
         </p>
       )}
+      <OperationalProgress summary={run.operational} />
       <QueueHealth runId={runId} baseline={run.queue?.baseline} />
 
       {/* Error Display */}

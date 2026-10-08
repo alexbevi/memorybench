@@ -100,6 +100,7 @@ export interface TokenMetrics {
 }
 
 export interface BenchmarkResult {
+  operational?: ReturnType<typeof import("../orchestrator/operations").operationalSummary>
   searchMeasurement?: import("../orchestrator/search-measurement").SearchMeasurement
   provenance?: import("../utils/provenance").RunProvenance
   answerF1?: { mean: number; count: number; version: string }

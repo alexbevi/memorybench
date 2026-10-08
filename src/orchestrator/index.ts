@@ -1,3 +1,6 @@
+import { operationalSummary, type OperationalAttempt } from "./operations"
+import { writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { estimateWorkload } from "./workload"
 import { admitWork, backlogPolicy, type BacklogPolicy } from "./admission"
 import { assertRunNotStopped } from "../server/runState"
@@ -273,6 +276,9 @@ export class Orchestrator {
       }
       this.checkpointManager.save(checkpoint)
     })
+    const attempt: OperationalAttempt = { startedAt: new Date().toISOString(), outcome: "running" }
+    ;(checkpoint.operationalAttempts ??= []).push(attempt)
+    this.checkpointManager.save(checkpoint)
     try {
       if (phases.includes("ingest")) {
         await admitWork(
@@ -286,17 +292,28 @@ export class Orchestrator {
           },
           { checkStop: () => assertRunNotStopped(runId) }
         )
-        await runIngestPhase(
-          provider,
-          benchmark,
-          checkpoint,
-          this.checkpointManager,
-          targetQuestionIds
-        )
+        attempt.ingestStartedAt = new Date().toISOString()
+        try {
+          await runIngestPhase(
+            provider,
+            benchmark,
+            checkpoint,
+            this.checkpointManager,
+            targetQuestionIds
+          )
+        } finally {
+          attempt.ingestFinishedAt = new Date().toISOString()
+        }
       }
 
       if (phases.includes("indexing")) {
-        await runIndexingPhase(provider, checkpoint, this.checkpointManager, targetQuestionIds)
+        attempt.indexingStartedAt = new Date().toISOString()
+        try {
+          await runIndexingPhase(provider, checkpoint, this.checkpointManager, targetQuestionIds)
+          attempt.readinessConfirmedAt = new Date().toISOString()
+        } finally {
+          attempt.indexingFinishedAt = new Date().toISOString()
+        }
       }
 
       if (phases.includes("search")) {
@@ -346,6 +363,8 @@ export class Orchestrator {
         throw error
       }
 
+      attempt.outcome = "completed"
+      attempt.finishedAt = new Date().toISOString()
       if (phases.includes("report")) {
         const report = generateReport(benchmark, checkpoint)
         saveReport(report)
@@ -356,9 +375,20 @@ export class Orchestrator {
       await this.checkpointManager.flush(checkpoint.runId)
       this.checkpointManager.updateStatus(checkpoint, "completed")
       logger.success("Run complete!")
+    } catch (error) {
+      attempt.outcome =
+        error instanceof Error && error.message.includes("stopped by user") ? "stopped" : "failed"
+      this.checkpointManager.updateStatus(checkpoint, "failed")
+      throw error
     } finally {
+      attempt.finishedAt = new Date().toISOString()
       await stopQueueMonitor()
+      this.checkpointManager.save(checkpoint)
       await this.checkpointManager.flush(checkpoint.runId)
+      writeFileSync(
+        join(this.checkpointManager.getRunPath(runId), "operational.json"),
+        JSON.stringify(operationalSummary(checkpoint), null, 2)
+      )
     }
   }
 

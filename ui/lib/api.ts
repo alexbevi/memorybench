@@ -55,6 +55,7 @@ export interface QuestionCheckpoint {
 }
 
 export interface RunDetail extends RunSummary {
+  operational?: ReturnType<typeof import("../../src/orchestrator/operations").operationalSummary>
   workload?: Workload
   admission?: import("../../src/orchestrator/admission").Admission
   queue?: { baseline: QueueObservation; latest: QueueObservation }

@@ -23,6 +23,7 @@ export function getPhasesFromPhase(fromPhase: PhaseId): PhaseId[] {
 }
 
 export interface IngestPhaseCheckpoint {
+  uploads?: import("../orchestrator/operations").UploadMeasurement[]
   status: PhaseStatus
   completedSessions: string[]
   ingestResult?: IngestResult
@@ -123,6 +124,7 @@ export interface SamplingConfig {
 }
 
 export interface RunCheckpoint {
+  operationalAttempts?: import("../orchestrator/operations").OperationalAttempt[]
   workload?: import("../orchestrator/workload").Workload
   admission?: import("../orchestrator/admission").Admission
   queue?: {
