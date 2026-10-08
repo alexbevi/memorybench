@@ -260,6 +260,7 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
     answeringModel: checkpoint.answeringModel,
     timestamp: new Date().toISOString(),
     readinessPolicy: checkpoint.readinessPolicy,
+    provenance: checkpoint.provenance,
     summary: {
       totalQuestions,
       correctCount,

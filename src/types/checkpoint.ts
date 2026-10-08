@@ -117,6 +117,7 @@ export interface SamplingConfig {
 }
 
 export interface RunCheckpoint {
+  provenance?: import("../utils/provenance").RunProvenance
   readinessPolicy?: import("./provider").ReadinessPolicy
   runId: string
   dataSourceRunId: string

@@ -1,3 +1,4 @@
+import { captureProvenance, PROCESS_PROVENANCE, datasetHash } from "../utils/provenance"
 import { selectQuestionsBySampling, DEFAULT_SAMPLE_SEED } from "./sampling"
 import type { ProviderName } from "../types/provider"
 import type { BenchmarkName } from "../types/benchmark"
@@ -19,6 +20,7 @@ import { runEvaluatePhase } from "./phases/evaluate"
 import { generateReport, saveReport, printReport } from "./phases/report"
 
 export interface OrchestratorOptions {
+  expectedDatasetHash?: string
   provider: ProviderName
   benchmark: BenchmarkName
   judgeModel: string
@@ -106,6 +108,8 @@ export class Orchestrator {
     const benchmark = createBenchmark(benchmarkName)
     await benchmark.load()
     const allQuestions = benchmark.getQuestions()
+    if (options.expectedDatasetHash && datasetHash(benchmark) !== options.expectedDatasetHash)
+      throw new Error("Dataset differs from the comparison manifest; start a new comparison")
 
     if (this.checkpointManager.exists(runId) && !isNewRun) {
       checkpoint = this.checkpointManager.load(runId)!
@@ -219,6 +223,23 @@ export class Orchestrator {
       this.checkpointManager.updateStatus(checkpoint, "running")
     }
 
+    if (checkpoint.provenance) {
+      if (checkpoint.provenance.datasetHash !== datasetHash(benchmark))
+        throw new Error("Dataset changed since this run started; use a fresh run ID")
+      if (checkpoint.provenance.code.sourceHash !== PROCESS_PROVENANCE.sourceHash)
+        throw new Error(
+          "Benchmark code changed since this run started; use a fresh run ID to avoid mixing policies"
+        )
+    } else if (isNewRun) {
+      checkpoint.provenance = captureProvenance(
+        benchmark,
+        targetQuestionIds ?? allQuestions.map((q) => q.questionId),
+        getProviderConfig(providerName)
+      )
+      this.checkpointManager.save(checkpoint)
+    } else {
+      logger.warn("Legacy run has no provenance; do not compare it as a controlled run")
+    }
     const provider = createProvider(providerName)
     await provider.initialize(getProviderConfig(providerName))
     if (

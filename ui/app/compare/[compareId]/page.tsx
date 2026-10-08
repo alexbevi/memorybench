@@ -411,6 +411,21 @@ export default function CompareDetailPage() {
                 )
             )}
           </div>
+          <div className="text-sm text-text-secondary mb-4">
+            {report.reports.map(({ provider, report: result }) => (
+              <details key={provider}>
+                <summary>
+                  {provider}:{" "}
+                  {result.provenance
+                    ? `code ${result.provenance.code.revision.slice(0, 8)}${result.provenance.code.dirty ? " (modified)" : ""}, ${result.provenance.answerPolicy}`
+                    : "Legacy run: provenance unavailable"}
+                </summary>
+                <pre className="overflow-auto text-xs">
+                  {JSON.stringify(result.provenance, null, 2)}
+                </pre>
+              </details>
+            ))}
+          </div>
           {/* Accuracy and Latency side by side */}
           <div className="flex gap-6">
             {/* Overall Accuracy - 35% width */}

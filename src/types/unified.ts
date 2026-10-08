@@ -100,6 +100,7 @@ export interface TokenMetrics {
 }
 
 export interface BenchmarkResult {
+  provenance?: import("../utils/provenance").RunProvenance
   answerF1?: { mean: number; count: number; version: string }
   readinessPolicy?: import("./provider").ReadinessPolicy
   provider: string

@@ -1,3 +1,4 @@
+import { datasetHash, PROCESS_PROVENANCE } from "../utils/provenance"
 import {
   comparisonExecutionOptions,
   executeComparisonTasks,
@@ -21,6 +22,8 @@ const COMPARE_DIR = "./data/compare"
 const RUNS_DIR = "./data/runs"
 
 export interface CompareManifest {
+  code?: typeof PROCESS_PROVENANCE
+  datasetHash?: string
   compareId: string
   createdAt: string
   updatedAt: string
@@ -159,6 +162,8 @@ export class BatchManager {
       answeringModel,
       sampling,
       targetQuestionIds,
+      code: PROCESS_PROVENANCE,
+      datasetHash: datasetHash(benchmarkInstance),
       ...executionOptions,
       runs: providers.map((provider) => ({
         provider,
@@ -190,6 +195,8 @@ export class BatchManager {
   }
 
   async executeRuns(manifest: CompareManifest): Promise<CompareResult> {
+    if (manifest.code && manifest.code.sourceHash !== PROCESS_PROVENANCE.sourceHash)
+      throw new Error("Comparison code changed; start a fresh comparison")
     logger.info(`Starting ${manifest.runs.length} ${manifest.execution ?? "parallel"} runs...`)
 
     // Register all runs in activeRuns before starting
@@ -207,6 +214,7 @@ export class BatchManager {
             runId: run.runId,
             answeringModel: manifest.answeringModel,
             questionIds: manifest.targetQuestionIds,
+            expectedDatasetHash: manifest.datasetHash,
             concurrency:
               manifest.concurrency === undefined ? undefined : { default: manifest.concurrency },
           })
