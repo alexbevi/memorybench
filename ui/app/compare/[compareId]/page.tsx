@@ -386,6 +386,10 @@ export default function CompareDetailPage() {
       {report && report.reports.length > 0 && (
         <div className="space-y-8">
           {/* Overall Accuracy Table */}
+          <p className="text-sm text-text-secondary mb-4">
+            Retrieval metrics judge relevance among returned records. Corpus recall and retrieval F1
+            are unavailable, including for older reports.
+          </p>
           {/* Accuracy and Latency side by side */}
           <div className="flex gap-6">
             {/* Overall Accuracy - 35% width */}
@@ -577,16 +581,10 @@ export default function CompareDetailPage() {
                         Precision
                       </th>
                       <th className="w-[14.28%] text-right py-2 px-3 text-text-muted font-medium uppercase text-xs">
-                        Recall
-                      </th>
-                      <th className="w-[14.28%] text-right py-2 px-3 text-text-muted font-medium uppercase text-xs">
-                        F1
-                      </th>
-                      <th className="w-[14.28%] text-right py-2 px-3 text-text-muted font-medium uppercase text-xs">
                         MRR
                       </th>
                       <th className="w-[14.28%] text-right py-2 px-3 text-text-muted font-medium uppercase text-xs">
-                        NDCG
+                        Retrieved-set NDCG
                       </th>
                     </tr>
                   </thead>
@@ -602,7 +600,7 @@ export default function CompareDetailPage() {
                       if (rows.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={7} className="py-4 px-3 text-center text-text-secondary">
+                            <td colSpan={5} className="py-4 px-3 text-center text-text-secondary">
                               Retrieval metrics not available
                             </td>
                           </tr>
@@ -610,14 +608,7 @@ export default function CompareDetailPage() {
                       }
 
                       // Find best values and FIRST index for each metric
-                      const metrics = [
-                        "hitAtK",
-                        "precisionAtK",
-                        "recallAtK",
-                        "f1AtK",
-                        "mrr",
-                        "ndcg",
-                      ] as const
+                      const metrics = ["hitAtK", "precisionAtK", "mrr", "ndcg"] as const
                       const bestByMetric = metrics.reduce(
                         (acc, metric) => {
                           const values = rows.map((r) => r.retrieval[metric])
@@ -652,28 +643,6 @@ export default function CompareDetailPage() {
                               }
                             >
                               {(row.retrieval.precisionAtK * 100).toFixed(0)}%
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            <span
-                              className={
-                                rowIndex === bestByMetric.recallAtK.firstIndex
-                                  ? "text-white font-semibold"
-                                  : "text-text-secondary"
-                              }
-                            >
-                              {(row.retrieval.recallAtK * 100).toFixed(0)}%
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            <span
-                              className={
-                                rowIndex === bestByMetric.f1AtK.firstIndex
-                                  ? "text-white font-semibold"
-                                  : "text-text-secondary"
-                              }
-                            >
-                              {(row.retrieval.f1AtK * 100).toFixed(0)}%
                             </span>
                           </td>
                           <td className="py-2 px-3 text-right font-mono">

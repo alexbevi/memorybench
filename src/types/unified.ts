@@ -33,20 +33,17 @@ export type SearchResult = unknown
 export interface RetrievalMetrics {
   hitAtK: number
   precisionAtK: number
-  recallAtK: number
-  f1AtK: number
+
   mrr: number
   ndcg: number
   k: number
   relevantRetrieved: number
-  totalRelevant: number
 }
 
 export interface RetrievalAggregates {
   hitAtK: number
   precisionAtK: number
-  recallAtK: number
-  f1AtK: number
+
   mrr: number
   ndcg: number
   k: number

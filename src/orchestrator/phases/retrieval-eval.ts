@@ -98,50 +98,34 @@ export async function calculateRetrievalMetrics(
     return {
       hitAtK: 0,
       precisionAtK: 0,
-      recallAtK: 0,
-      f1AtK: 0,
+
       mrr: 0,
       ndcg: 0,
       k: 0,
       relevantRetrieved: 0,
-      totalRelevant: 1,
     }
   }
 
   const relevanceResults = await evaluateAllChunks(model, question, groundTruth, resultsToEval)
 
-  const relevanceScores = resultsToEval.map((_, i) => {
-    const id = `result_${i + 1}`
-    const result = relevanceResults.find((r) => r.id === id)
-    return result?.relevant === 1 ? 1 : 0
-  })
+  return scoreRetrievedResults(
+    resultsToEval.map((_, i) => {
+      const result = relevanceResults.find((r) => r.id === `result_${i + 1}`)
+      return result?.relevant === 1 ? 1 : 0
+    })
+  )
+}
 
+// Relevance is judged only within retrieved results; corpus recall is unknown.
+export function scoreRetrievedResults(relevanceScores: number[]): RetrievalMetrics {
   const relevantRetrieved = relevanceScores.filter((r) => r === 1).length
-  const totalRelevant = Math.max(1, relevantRetrieved)
-
-  const hitAtK = relevantRetrieved > 0 ? 1 : 0
-
-  const precisionAtK = resultsToEval.length > 0 ? relevantRetrieved / resultsToEval.length : 0
-
-  const recallAtK = relevantRetrieved > 0 ? 1 : 0
-
-  const f1AtK =
-    precisionAtK + recallAtK > 0 ? (2 * (precisionAtK * recallAtK)) / (precisionAtK + recallAtK) : 0
-
   const firstRelevantIndex = relevanceScores.findIndex((r) => r === 1)
-  const mrr = firstRelevantIndex >= 0 ? 1 / (firstRelevantIndex + 1) : 0
-
-  const ndcg = calculateNDCG(relevanceScores, totalRelevant)
-
   return {
-    hitAtK,
-    precisionAtK,
-    recallAtK,
-    f1AtK,
-    mrr,
-    ndcg,
-    k: resultsToEval.length,
+    hitAtK: relevantRetrieved > 0 ? 1 : 0,
+    precisionAtK: relevanceScores.length ? relevantRetrieved / relevanceScores.length : 0,
+    mrr: firstRelevantIndex >= 0 ? 1 / (firstRelevantIndex + 1) : 0,
+    ndcg: calculateNDCG(relevanceScores, relevantRetrieved),
+    k: relevanceScores.length,
     relevantRetrieved,
-    totalRelevant,
   }
 }

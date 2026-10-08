@@ -456,117 +456,16 @@ export class BatchManager {
 
     const hasRetrieval = reports.some((r) => r.report.retrieval)
     if (hasRetrieval) {
-      const k = reports.find((r) => r.report.retrieval)?.report.retrieval?.k || 10
-      console.log(`\nRETRIEVAL METRICS (K=${k})`)
       console.log(
-        "┌" +
-          "─".repeat(providerWidth + 2) +
-          "┬" +
-          "─".repeat(9) +
-          "┬" +
-          "─".repeat(11) +
-          "┬" +
-          "─".repeat(10) +
-          "┬" +
-          "─".repeat(9) +
-          "┬" +
-          "─".repeat(9) +
-          "┬" +
-          "─".repeat(9) +
-          "┐"
+        "\nRETRIEVAL: LLM-judged relevance within retrieved results; corpus recall unavailable"
       )
-      console.log(
-        "│ " +
-          pad("Provider", providerWidth) +
-          " │ " +
-          pad("Hit@K", 7) +
-          " │ " +
-          pad("Precision", 9) +
-          " │ " +
-          pad("Recall", 8) +
-          " │ " +
-          pad("F1", 7) +
-          " │ " +
-          pad("MRR", 7) +
-          " │ " +
-          pad("NDCG", 7) +
-          " │"
-      )
-      console.log(
-        "├" +
-          "─".repeat(providerWidth + 2) +
-          "┼" +
-          "─".repeat(9) +
-          "┼" +
-          "─".repeat(11) +
-          "┼" +
-          "─".repeat(10) +
-          "┼" +
-          "─".repeat(9) +
-          "┼" +
-          "─".repeat(9) +
-          "┼" +
-          "─".repeat(9) +
-          "┤"
-      )
-
       for (const { provider, report } of reports) {
-        if (report.retrieval) {
-          const r = report.retrieval
+        const r = report.retrieval
+        if (r)
           console.log(
-            "│ " +
-              pad(provider, providerWidth) +
-              " │ " +
-              padPct(r.hitAtK, 7) +
-              " │ " +
-              padPct(r.precisionAtK, 9) +
-              " │ " +
-              padPct(r.recallAtK, 8) +
-              " │ " +
-              padPct(r.f1AtK, 7) +
-              " │ " +
-              r.mrr.toFixed(3).padStart(7) +
-              " │ " +
-              r.ndcg.toFixed(3).padStart(7) +
-              " │"
+            `${provider}: Hit@${r.k}=${padPct(r.hitAtK, 0)}, Precision=${padPct(r.precisionAtK, 0)}, MRR=${r.mrr.toFixed(3)}, retrieved-set NDCG=${r.ndcg.toFixed(3)}`
           )
-        } else {
-          console.log(
-            "│ " +
-              pad(provider, providerWidth) +
-              " │ " +
-              pad("N/A", 7) +
-              " │ " +
-              pad("N/A", 9) +
-              " │ " +
-              pad("N/A", 8) +
-              " │ " +
-              pad("N/A", 7) +
-              " │ " +
-              pad("N/A", 7) +
-              " │ " +
-              pad("N/A", 7) +
-              " │"
-          )
-        }
       }
-      console.log(
-        "└" +
-          "─".repeat(providerWidth + 2) +
-          "┴" +
-          "─".repeat(9) +
-          "┴" +
-          "─".repeat(11) +
-          "┴" +
-          "─".repeat(10) +
-          "┴" +
-          "─".repeat(9) +
-          "┴" +
-          "─".repeat(9) +
-          "┴" +
-          "─".repeat(9) +
-          "┘"
-      )
     }
 
     const allTypes = new Set<string>()

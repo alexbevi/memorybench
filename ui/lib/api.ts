@@ -35,7 +35,7 @@ export interface QuestionCheckpoint {
     ingest: { status: string; completedSessions: string[] }
     indexing: { status: string }
     search: { status: string; results?: any[] }
-    answer: { status: string; hypothesis?: string }
+    answer: { status: string; hypothesis?: string; promptTokens?: number }
     evaluate: { status: string; score?: number; label?: string; explanation?: string }
   }
 }
@@ -266,6 +266,7 @@ export interface EvaluationResult {
 
 // Leaderboard
 export interface LeaderboardEntry {
+  retrieval?: BenchmarkResult["retrieval"]
   id: number
   runId: string
   provider: string
@@ -274,7 +275,15 @@ export interface LeaderboardEntry {
   accuracy: number
   totalQuestions: number
   correctCount: number
-  byQuestionType: Record<string, { total: number; correct: number; accuracy: number }>
+  byQuestionType: Record<
+    string,
+    {
+      total: number
+      correct: number
+      accuracy: number
+      retrieval?: NonNullable<BenchmarkResult["retrieval"]>
+    }
+  >
   questionTypeRegistry: QuestionTypeRegistry | null
   latencyStats: LatencyByPhase | null
   evaluations: EvaluationResult[]
@@ -395,15 +404,22 @@ export interface BenchmarkResult {
     correctCount: number
     accuracy: number
   }
-  byQuestionType: Record<string, { total: number; correct: number; accuracy: number }>
+  byQuestionType: Record<
+    string,
+    {
+      total: number
+      correct: number
+      accuracy: number
+      retrieval?: NonNullable<BenchmarkResult["retrieval"]>
+    }
+  >
   questionTypeRegistry: QuestionTypeRegistry | null
   latency?: LatencyByPhase
   latencyStats?: LatencyByPhase | null
   retrieval?: {
     hitAtK: number
     precisionAtK: number
-    recallAtK: number
-    f1AtK: number
+
     mrr: number
     ndcg: number
     k: number
