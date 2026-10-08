@@ -22,6 +22,16 @@ export async function runEvaluatePhase(
     ? questions.filter((q) => questionIds.includes(q.questionId))
     : questions
 
+  for (const question of targetQuestions) {
+    const answer = checkpoint.questions[question.questionId]?.phases.answer
+    if (answer?.status === "completed" && !answer.hypothesis?.trim()) {
+      const error = "Answer is empty. Resume from the answer phase before evaluating."
+      checkpointManager.updatePhase(checkpoint, question.questionId, "answer", { status: "failed", error })
+      checkpointManager.updatePhase(checkpoint, question.questionId, "evaluate", { status: "failed", error })
+      throw new Error(`${question.questionId}: ${error}`)
+    }
+  }
+
   const pendingQuestions = targetQuestions.filter((q) => {
     const status = checkpointManager.getPhaseStatus(checkpoint, q.questionId, "evaluate")
     const answerStatus = checkpointManager.getPhaseStatus(checkpoint, q.questionId, "answer")

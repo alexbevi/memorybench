@@ -1,3 +1,4 @@
+import { assertRequestedPhasesComplete } from "./completion"
 import { captureProvenance, PROCESS_PROVENANCE, datasetHash } from "../utils/provenance"
 import { selectQuestionsBySampling, DEFAULT_SAMPLE_SEED } from "./sampling"
 import type { ProviderName } from "../types/provider"
@@ -301,6 +302,14 @@ export class Orchestrator {
         targetQuestionIds,
         provider
       )
+    }
+
+    try {
+      assertRequestedPhasesComplete(checkpoint, phases, targetQuestionIds ?? allQuestions.map((q) => q.questionId))
+    } catch (error) {
+      this.checkpointManager.updateStatus(checkpoint, "failed")
+      await this.checkpointManager.flush(checkpoint.runId)
+      throw error
     }
 
     if (phases.includes("report")) {
