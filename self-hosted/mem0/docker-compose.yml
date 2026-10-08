@@ -1,0 +1,154 @@
+# Standalone Mem0 REST API, PostgreSQL/pgvector, and Neo4j.
+# Requires Docker Compose 2.17+ and the checked-in server config/instructions.
+# Start: OPENAI_API_KEY='sk-your-key' docker compose up -d --build
+# Custom endpoint:
+# OPENAI_BASE_URL='https://gateway.example.com/v1' OPENAI_API_KEY='gateway-key' \
+#   docker compose up -d --build
+# API documentation: http://localhost:8888/docs
+# Optional authentication: set MEM0_API_KEY and send it in the X-API-Key header.
+# Uses OpenAI by default; OPENAI_BASE_URL can select an OpenAI-compatible gateway.
+# Models: gpt-4.1-nano-2025-04-14 and text-embedding-3-small.
+# Mem0 v1.0.11 is pinned to preserve the guide's three-service architecture.
+# Graph extraction defaults off for parity with the cloud adapter.
+# Set MEM0_GRAPH_ENABLED=true to measure graph-enabled ingestion separately.
+# Sources:
+# https://mem0.ai/library/integrations/self-host-mem0-docker
+# https://github.com/mem0ai/mem0/blob/144627c4ce5bc4db6acac17cbd158065f2b27a8d/server/main.py
+# https://github.com/mem0ai/mem0/blob/144627c4ce5bc4db6acac17cbd158065f2b27a8d/mem0/llms/openai.py
+# https://github.com/mem0ai/mem0/blob/144627c4ce5bc4db6acac17cbd158065f2b27a8d/mem0/embeddings/openai.py
+# https://docs.docker.com/reference/compose-file/build/#dockerfile_inline
+
+name: mem0-standalone
+
+services:
+  mem0:
+    build:
+      # Docker fetches the pinned upstream source; no local clone is required.
+      context: https://github.com/mem0ai/mem0.git#144627c4ce5bc4db6acac17cbd158065f2b27a8d:server
+      dockerfile_inline: |
+        FROM python:3.12-slim-bookworm
+        WORKDIR /app
+        ENV PYTHONDONTWRITEBYTECODE=1 \
+            PYTHONUNBUFFERED=1 \
+            MEM0_TELEMETRY=false
+        RUN python -m pip install --no-cache-dir \
+            "mem0ai==1.0.11" \
+            "fastapi==0.115.8" \
+            "uvicorn==0.34.0" \
+            "python-dotenv==1.0.1" \
+            "psycopg[binary,pool]==3.3.6" \
+            "langchain-neo4j==0.4.0" \
+            "neo4j==5.28.7" \
+            "rank-bm25==0.2.2"
+        COPY main.py /app/main.py
+        # Fail the build if the pinned upstream initialization point changes.
+        RUN python -c "from pathlib import Path; p = Path('/app/main.py'); s = p.read_text(); old = 'MEMORY_INSTANCE = Memory.from_config(DEFAULT_CONFIG)'; assert s.count(old) == 1; p.write_text(s.replace(old, 'from memorybench_config import configure\nMEMORY_INSTANCE = Memory.from_config(configure(DEFAULT_CONFIG))'))"
+        RUN mkdir -p /app/history
+        EXPOSE 8000
+        CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    init: true
+    ports:
+      # The API is accessible only from this host by default.
+      - "127.0.0.1:${MEM0_PORT:-8888}:8000"
+    environment:
+      # Use the credential accepted by your selected endpoint. A nonempty value
+      # is required; for an unauthenticated local gateway, a dummy value works
+      # if that gateway accepts or ignores the Authorization header.
+      OPENAI_API_KEY: "${OPENAI_API_KEY:?Set OPENAI_API_KEY in your shell before starting}"
+      # Supported by both OpenAI clients in this pinned Mem0 version, including
+      # graph extraction. Defaults to OpenAI when unset or empty.
+      # Supply the full API prefix (usually /v1), not /chat/completions itself.
+      # The same gateway must serve /chat/completions and /embeddings, support
+      # JSON response format and tool calling, and expose the model names above
+      # (or compatible aliases). Embeddings must have 1536 dimensions.
+      # This setting changes the endpoint only; it does not select new models.
+      # The URL must be reachable from the container: localhost means Mem0's
+      # container. On Docker Desktop, use host.docker.internal for a host gateway.
+      # Apply changes with docker compose up -d; restart alone keeps old env vars.
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+      ADMIN_API_KEY: "${MEM0_API_KEY:-}"
+      MEM0_TELEMETRY: "false"
+      MEM0_GRAPH_ENABLED: "${MEM0_GRAPH_ENABLED:-false}"
+      MEM0_DIR: /app/history
+      HISTORY_DB_PATH: /app/history/history.db
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: mem0
+      POSTGRES_USER: mem0
+      # Use URL-safe database passwords (letters and digits are simplest).
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-mem0localpostgres}"
+      POSTGRES_COLLECTION_NAME: memories
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: "${NEO4J_PASSWORD:-mem0localgraph}"
+    volumes:
+      - mem0_history:/app/history
+      - ./server_config.py:/app/memorybench_config.py:ro
+      - ../../src/providers/mem0/extraction-instructions.json:/app/extraction-instructions.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=5).close()"
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    # Current upstream pgvector image; replaces the guide's archived ankane image.
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    shm_size: 128mb
+    environment:
+      POSTGRES_DB: mem0
+      POSTGRES_USER: mem0
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-mem0localpostgres}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "mem0", "-d", "mem0"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  neo4j:
+    image: neo4j:5.26.4
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD:-mem0localgraph}"
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+      NEO4J_dbms_security_procedures_allowlist: "apoc.*"
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512m
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      # Verify authenticated Bolt connectivity and APOC availability.
+      test:
+        - CMD-SHELL
+        - >-
+          cypher-shell -a bolt://127.0.0.1:7687 -u neo4j
+          -p "$${NEO4J_AUTH#neo4j/}"
+          "RETURN apoc.version();" >/dev/null 2>&1
+      interval: 10s
+      timeout: 15s
+      retries: 18
+      start_period: 90s
+
+# Memory vectors, graph data, and SQLite history survive container recreation.
+# docker compose down preserves these volumes; adding -v deletes their contents.
+volumes:
+  mem0_history:
+  postgres_data:
+  neo4j_data:

@@ -22,38 +22,7 @@ import type { UnifiedSession } from "../../types/unified"
 import { logger } from "../../utils/logger"
 import { MEM0_PROMPTS } from "./prompts"
 
-/**
- * Custom instructions from Mem0's official evaluation.
- * Sets project-level instructions for memory extraction.
- */
-const CUSTOM_INSTRUCTIONS = `Generate personal memories that follow these guidelines:
-
-1. Each memory should be self-contained with complete context, including:
-   - The person's name, do not use "user" while creating memories
-   - Personal details (career aspirations, hobbies, life circumstances)
-   - Emotional states and reactions
-   - Ongoing journeys or future plans
-   - Specific dates when events occurred
-
-2. Include meaningful personal narratives focusing on:
-   - Identity and self-acceptance journeys
-   - Family planning and parenting
-   - Creative outlets and hobbies
-   - Mental health and self-care activities
-   - Career aspirations and education goals
-   - Important life events and milestones
-
-3. Make each memory rich with specific details rather than general statements
-   - Include timeframes (exact dates when possible)
-   - Name specific activities (e.g., "charity race for mental health" rather than just "exercise")
-   - Include emotional context and personal growth elements
-
-4. Preserve facts from every named human speaker in the supplied source conversation.
-   - Source headers identify the speaker, session, date, and original role
-   - Attribute each fact to its named speaker; never merge different people
-   - Assistant messages may provide context, but do not treat an assistant as a human speaker
-
-5. Format each memory as a paragraph with a clear narrative structure that captures the person's experience, challenges, and aspirations`
+import CUSTOM_INSTRUCTIONS from "./extraction-instructions.json"
 
 export class Mem0Provider implements Provider {
   name = "mem0"
