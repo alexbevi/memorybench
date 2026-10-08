@@ -64,14 +64,14 @@ class IndexingProgressTracker {
     if (displayStr !== this.lastDisplayed) {
       this.lastDisplayed = displayStr
       if (logger.verbose || !process.stdout.isTTY) {
-        logger.info(`Indexing: ${agg.completed}/${agg.total} episodes (${agg.failed} failed)`)
+        logger.info(`Indexing: ${agg.completed}/${agg.total} receipts (${agg.failed} failed)`)
         return
       }
       const percent = agg.total > 0 ? Math.round((agg.completed / agg.total) * 100) : 0
       const bar = "█".repeat(Math.floor(percent / 5)) + "░".repeat(20 - Math.floor(percent / 5))
       const failedStr = agg.failed > 0 ? ` (${agg.failed} failed)` : ""
       process.stdout.write(
-        `\r\x1b[36m[${bar}]\x1b[0m ${percent}% Indexing: ${agg.completed}/${agg.total} episodes${failedStr}`
+        `\r\x1b[36m[${bar}]\x1b[0m ${percent}% Indexing: ${agg.completed}/${agg.total} receipts${failedStr}`
       )
     }
   }
@@ -84,7 +84,7 @@ class IndexingProgressTracker {
     const agg = this.getAggregated()
     const failedStr = agg.failed > 0 ? ` (${agg.failed} failed)` : ""
     process.stdout.write(
-      `\r\x1b[36m[${"█".repeat(20)}]\x1b[0m 100% Indexing: ${agg.completed}/${agg.total} episodes${failedStr}\n`
+      `\r\x1b[36m[${"█".repeat(20)}]\x1b[0m 100% Indexing: ${agg.completed}/${agg.total} receipts${failedStr}\n`
     )
   }
 
@@ -119,7 +119,7 @@ export async function runIndexingPhase(
   const totalEpisodes = tracker.getTotalEpisodes()
 
   logger.info(
-    `Awaiting indexing for ${toIndex.length} questions, ${totalEpisodes} episodes (concurrency: ${concurrency})...`
+    `Awaiting indexing for ${toIndex.length} questions, ${totalEpisodes} receipts (concurrency: ${concurrency})...`
   )
 
   tracker.display()
@@ -155,7 +155,7 @@ export async function runIndexingPhase(
 
       logger.debug(`[indexing] Started ${question.questionId}`, {
         containerTag: question.containerTag,
-        episodes: episodeCount,
+        receipts: episodeCount,
       })
       let lastUpdate = startTime
       const heartbeat = setInterval(() => {
@@ -180,6 +180,7 @@ export async function runIndexingPhase(
             status: "in_progress",
             completedIds: progress.completedIds,
             failedIds: progress.failedIds,
+            readiness: progress.readiness,
           })
         })
 
@@ -189,6 +190,7 @@ export async function runIndexingPhase(
           status: "completed",
           completedIds: lastProgress.completedIds,
           failedIds: lastProgress.failedIds,
+          readiness: lastProgress.readiness,
           completedAt: new Date().toISOString(),
           durationMs,
         })

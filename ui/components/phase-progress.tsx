@@ -37,6 +37,9 @@ export function PhaseProgress({ summary, questions, isRunning = false }: PhasePr
   const [isHovering, setIsHovering] = useState(false)
   const [justClicked, setJustClicked] = useState(false)
   const ingestion = questions ? getIngestionProgress(questions, summary.total) : undefined
+  const readiness = Object.values(questions ?? {}).filter(
+    (q) => q.phases.indexing.status === "in_progress" && q.phases.indexing.readiness
+  )
 
   return (
     <div className="card">
@@ -177,6 +180,38 @@ export function PhaseProgress({ summary, questions, isRunning = false }: PhasePr
           confirmed ready · {summary.indexed}/{summary.total} questions ready
           {summary.ingested < summary.total && " · checks begin after ingestion finishes"}
         </p>
+      )}
+      {isRunning && readiness.length > 0 && (
+        <div className="mt-2 text-xs text-text-secondary" aria-live="polite">
+          <p>
+            Atlas readiness checks require a 180-second minimum wait after a session's last write,
+            searchable episodes, and 60 seconds of unchanged episode contents.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {readiness.map((q) => {
+              const detail = q.phases.indexing.readiness!
+              const labels = {
+                pending: "not checked",
+                grace: "minimum wait",
+                episodes: "waiting for episodes",
+                search: "waiting for searchability",
+                stability: "stability wait",
+              }
+              return (
+                <li key={q.questionId}>
+                  <span className="font-mono">{q.questionId}</span>: {detail.readySessions}/
+                  {detail.totalSessions} sessions ready
+                  {Object.entries(detail.waiting)
+                    .filter(([, count]) => count > 0)
+                    .map(
+                      ([reason, count]) => ` · ${count} ${labels[reason as keyof typeof labels]}`
+                    )}
+                  {detail.checkingSession && ` · checking ${detail.checkingSession}`}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
       {ingestion && (ingestion.savedSessions > 0 || ingestion.active.length > 0) && (
         <div className="mt-3 text-xs text-text-secondary" aria-live="polite">

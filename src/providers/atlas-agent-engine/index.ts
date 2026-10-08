@@ -390,6 +390,36 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
       { tag, sessions: sessions.length }
     )
     const stability = new Map<string, { fingerprint: string; since: number }>()
+    type SessionStatus = "pending" | "grace" | "episodes" | "search" | "stability" | "ready"
+    // Retain the latest observation between scans; rechecks can revoke readiness.
+    const statuses = new Map<string, SessionStatus>(sessions.map((s) => [s.remoteId, "pending"]))
+    const publish = (checkingSession?: string) => {
+      const waiting = { pending: 0, grace: 0, episodes: 0, search: 0, stability: 0 }
+      const completedIds: string[] = []
+      let readySessions = 0
+      for (const session of sessions) {
+        const status = statuses.get(session.remoteId)!
+        if (status === "ready") {
+          readySessions++
+          completedIds.push(
+            ...session.writes.flatMap((w) => (w.id && wanted.has(w.id) ? [w.id] : []))
+          )
+        } else waiting[status]++
+      }
+      progress?.({
+        completedIds,
+        failedIds: [],
+        total: wanted.size,
+        readiness: {
+          totalSessions: sessions.length,
+          readySessions,
+          waiting,
+          checkingSession,
+          checkedAt: new Date(this.now()).toISOString(),
+        },
+      })
+    }
+    publish()
     const deadline = this.now() + TIMEOUT_MS
     while (this.now() < deadline) {
       const completedIds: string[] = []
@@ -397,78 +427,91 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
       let maxGraceRemainingMs = 0
       for (const session of sessions) {
         if (this.now() >= deadline) break
-        const graceRemainingMs = Math.max(0, 180000 - (this.now() - session.lastWrite))
-        if (graceRemainingMs > 0) {
-          waiting.grace++
-          maxGraceRemainingMs = Math.max(maxGraceRemainingMs, graceRemainingMs)
-          logger.trace(`[${this.name}] Session waiting after last write`, {
+        publish(session.sourceId)
+        try {
+          const graceRemainingMs = Math.max(0, 180000 - (this.now() - session.lastWrite))
+          if (graceRemainingMs > 0) {
+            statuses.set(session.remoteId, "grace")
+            waiting.grace++
+            maxGraceRemainingMs = Math.max(maxGraceRemainingMs, graceRemainingMs)
+            logger.trace(`[${this.name}] Session waiting after last write`, {
+              tag,
+              sessionId: session.remoteId,
+              remainingMs: graceRemainingMs,
+            })
+            continue
+          }
+          const memory = this.memory.bind({ userId: scope })
+          logger.trace(`[${this.name}] Listing session episodes`, {
             tag,
             sessionId: session.remoteId,
-            remainingMs: graceRemainingMs,
           })
-          continue
-        }
-        const memory = this.memory.bind({ userId: scope })
-        logger.trace(`[${this.name}] Listing session episodes`, {
-          tag,
-          sessionId: session.remoteId,
-        })
-        const entries = (await memory.listEpisodes({
-          sessionId: session.remoteId,
-          visibility: "private",
-          limit: 1000,
-        })) as { id?: string; content?: string }[]
-        logger.trace(`[${this.name}] Session episodes returned`, {
-          tag,
-          sessionId: session.remoteId,
-          count: entries.length,
-        })
-        if (!entries.length || entries.length >= 1000 || entries.some((e) => !e.id || !e.content)) {
-          waiting.episodes++
-          stability.delete(session.remoteId)
-          continue
-        }
-        const fingerprint = digest(
-          entries
-            .map((e) => [e.id, e.content])
-            .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-        )
-        const previous = stability.get(session.remoteId)
-        if (previous?.fingerprint !== fingerprint)
-          stability.set(session.remoteId, { fingerprint, since: this.now() })
-        logger.trace(`[${this.name}] Checking session searchability`, {
-          tag,
-          sessionId: session.remoteId,
-        })
-        const hits = await memory.searchEpisodes({
-          query: entries[0].content!.slice(0, 512),
-          sessionId: session.remoteId,
-          visibility: "private",
-          topK: 100,
-        })
-        const searchable = hits.some((h) => entries.some((e) => e.id === h.id))
-        logger.trace(`[${this.name}] Session search completed`, {
-          tag,
-          sessionId: session.remoteId,
-          searchable,
-        })
-        if (!searchable) {
-          waiting.search++
-          stability.delete(session.remoteId)
-          continue
-        }
-        const stableMs = this.now() - stability.get(session.remoteId)!.since
-        logger.trace(`[${this.name}] Session stability`, {
-          tag,
-          sessionId: session.remoteId,
-          stableMs,
-          requiredMs: 60000,
-        })
-        if (stableMs < 60000) waiting.stability++
-        if (stableMs >= 60000)
-          completedIds.push(
-            ...session.writes.flatMap((w) => (w.id && wanted.has(w.id) ? [w.id] : []))
+          const entries = (await memory.listEpisodes({
+            sessionId: session.remoteId,
+            visibility: "private",
+            limit: 1000,
+          })) as { id?: string; content?: string }[]
+          logger.trace(`[${this.name}] Session episodes returned`, {
+            tag,
+            sessionId: session.remoteId,
+            count: entries.length,
+          })
+          if (
+            !entries.length ||
+            entries.length >= 1000 ||
+            entries.some((e) => !e.id || !e.content)
+          ) {
+            statuses.set(session.remoteId, "episodes")
+            waiting.episodes++
+            stability.delete(session.remoteId)
+            continue
+          }
+          const fingerprint = digest(
+            entries
+              .map((e) => [e.id, e.content])
+              .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
           )
+          const previous = stability.get(session.remoteId)
+          if (previous?.fingerprint !== fingerprint)
+            stability.set(session.remoteId, { fingerprint, since: this.now() })
+          logger.trace(`[${this.name}] Checking session searchability`, {
+            tag,
+            sessionId: session.remoteId,
+          })
+          const hits = await memory.searchEpisodes({
+            query: entries[0].content!.slice(0, 512),
+            sessionId: session.remoteId,
+            visibility: "private",
+            topK: 100,
+          })
+          const searchable = hits.some((h) => entries.some((e) => e.id === h.id))
+          logger.trace(`[${this.name}] Session search completed`, {
+            tag,
+            sessionId: session.remoteId,
+            searchable,
+          })
+          if (!searchable) {
+            statuses.set(session.remoteId, "search")
+            waiting.search++
+            stability.delete(session.remoteId)
+            continue
+          }
+          const stableMs = this.now() - stability.get(session.remoteId)!.since
+          logger.trace(`[${this.name}] Session stability`, {
+            tag,
+            sessionId: session.remoteId,
+            stableMs,
+            requiredMs: 60000,
+          })
+          statuses.set(session.remoteId, stableMs >= 60000 ? "ready" : "stability")
+          if (stableMs < 60000) waiting.stability++
+          if (stableMs >= 60000)
+            completedIds.push(
+              ...session.writes.flatMap((w) => (w.id && wanted.has(w.id) ? [w.id] : []))
+            )
+        } finally {
+          publish()
+        }
       }
       logger.debug(`[${this.name}] Readiness poll`, {
         tag,
@@ -478,7 +521,6 @@ export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
         maxGraceRemainingMs,
         remainingMs: Math.max(0, deadline - this.now()),
       })
-      progress?.({ completedIds, failedIds: [], total: wanted.size })
       if (completedIds.length === wanted.size) return
       await this.sleep(POLL_MS)
     }

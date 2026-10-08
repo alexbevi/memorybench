@@ -34,7 +34,16 @@ export interface QuestionCheckpoint {
   questionType: string
   phases: {
     ingest: { status: string; completedSessions: string[] }
-    indexing: { status: string }
+    indexing: {
+      status: string
+      readiness?: {
+        totalSessions: number
+        readySessions: number
+        waiting: Record<"pending" | "grace" | "episodes" | "search" | "stability", number>
+        checkingSession?: string
+        checkedAt: string
+      }
+    }
     search: { status: string; results?: any[] }
     answer: { status: string; hypothesis?: string; promptTokens?: number }
     evaluate: { status: string; score?: number; label?: string; explanation?: string }

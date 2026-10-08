@@ -33,6 +33,7 @@ export interface IngestPhaseCheckpoint {
 }
 
 export interface IndexingPhaseCheckpoint {
+  readiness?: import("./provider").ReadinessDetails
   status: PhaseStatus
   completedIds?: string[]
   failedIds?: string[]

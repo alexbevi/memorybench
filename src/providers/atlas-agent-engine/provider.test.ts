@@ -521,3 +521,57 @@ test("readiness still queries missing hits and does not credit other sessions", 
   expect(searches).toBe(3)
   expect(completed.at(-1)).toBe(3)
 })
+
+test("extraction publishes session readiness before a later session check finishes", async () => {
+  const f = await fixture()
+  const snapshots: import("../../types/provider").IndexingProgress[] = []
+  let observedPartial = false
+  const p = new AtlasAgentEngineProvider({
+    ...f.deps,
+    fetchImpl: async (url, init) => {
+      if (url.includes("/episodic?") && f.time() >= 241000) {
+        const latest = snapshots.at(-1)
+        if (latest?.readiness?.checkingSession === "s2") {
+          expect(latest.completedIds).toHaveLength(1)
+          expect(latest.readiness.readySessions).toBe(1)
+          observedPartial = true
+        }
+      }
+      return f.deps.fetchImpl(url, init)
+    },
+  })
+  await p.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  const result = await p.ingest([session, { ...session, sessionId: "s2" }], { containerTag: "run" })
+  await p.awaitIndexing(result, "run", (progress) => snapshots.push(progress))
+  expect(observedPartial).toBe(true)
+  expect(snapshots.some((p) => p.readiness?.waiting.grace === 2)).toBe(true)
+  expect(snapshots.some((p) => p.readiness?.waiting.stability === 2)).toBe(true)
+  expect(snapshots.at(-1)?.readiness?.readySessions).toBe(2)
+  expect(
+    snapshots
+      .filter((p) => Date.parse(p.readiness!.checkedAt) < 241000)
+      .every((p) => p.completedIds.length === 0)
+  ).toBe(true)
+})
+
+test("extraction revokes earlier readiness if episodes disappear during a later scan", async () => {
+  const f = await fixture()
+  const p = new AtlasAgentEngineProvider(f.deps)
+  await p.initialize({ apiKey: "", baseUrl: "http://localhost:8000" })
+  const result = await p.ingest([session, { ...session, sessionId: "missing" }], {
+    containerTag: "run",
+  })
+  f.episodes.pop()
+  let hadReady = false
+  let revoked = false
+  await expect(
+    p.awaitIndexing(result, "run", (progress) => {
+      if (progress.completedIds.length) {
+        hadReady = true
+        f.episodes.splice(0)
+      } else if (hadReady && progress.readiness?.waiting.episodes === 2) revoked = true
+    })
+  ).rejects.toThrow("readiness timed out")
+  expect(hadReady).toBe(true)
+  expect(revoked).toBe(true)
+})

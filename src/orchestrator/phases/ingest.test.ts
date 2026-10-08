@@ -32,6 +32,12 @@ test("resume retains receipts from completed sessions through indexing", async (
     const calls: string[] = []
     let fail = true
     let indexed: IngestResult | undefined
+    const readiness = {
+      totalSessions: 2,
+      readySessions: 2,
+      waiting: { pending: 0, grace: 0, episodes: 0, search: 0, stability: 0 },
+      checkedAt: "2026-10-08T00:00:00Z",
+    }
     const provider: Provider = {
       name: "fake",
       initialize: async () => {},
@@ -48,6 +54,7 @@ test("resume retains receipts from completed sessions through indexing", async (
           completedIds: [...result.documentIds, ...(result.taskIds || [])],
           failedIds: [],
           total: 4,
+          readiness,
         })
       },
     }
@@ -67,6 +74,7 @@ test("resume retains receipts from completed sessions through indexing", async (
     expect(calls).toEqual(["s1", "s2", "s2"])
     expect(indexed).toEqual({ documentIds: ["s1", "s2"], taskIds: ["task-s1", "task-s2"] })
     expect(manager.load("resume")!.questions.q.phases.indexing.status).toBe("completed")
+    expect(manager.load("resume")!.questions.q.phases.indexing.readiness).toEqual(readiness)
   } finally {
     await manager.flush()
     rmSync(directory, { recursive: true, force: true })

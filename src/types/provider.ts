@@ -24,7 +24,16 @@ export interface IngestResult {
   taskIds?: string[]
 }
 
+export interface ReadinessDetails {
+  totalSessions: number
+  readySessions: number
+  waiting: Record<"pending" | "grace" | "episodes" | "search" | "stability", number>
+  checkingSession?: string
+  checkedAt: string
+}
+
 export interface IndexingProgress {
+  readiness?: ReadinessDetails
   completedIds: string[]
   failedIds: string[]
   total: number

@@ -20,6 +20,11 @@ Indexing polls source-derived text for each episode for up to 15 minutes. Timeou
 
 `atlas-agent-engine` records the original nonempty turns with deterministic idempotency keys. The service extracts memories in the background. Search requests semantic and episodic memories across the container's sessions. No benchmark questions or answers are used for readiness probes.
 
+The UI counts ingestion receipts confirmed ready, not extracted episodes. For extraction mode, each receipt represents a recorded turn. Readiness progress publishes before and after each session check, rather than waiting for a complete scan. Active questions show session counts waiting for the 180-second minimum delay after their last write, episode availability, searchability, or 60 seconds of stable episode contents. Counts describe the latest observations and can decrease if a later check invalidates readiness. These checks remain a heuristic, not an extraction-complete signal.
+
+Session checks are sequential within each question, with a five-second delay between scans; configured indexing concurrency controls simultaneous questions. A remote request can therefore delay the next update. The UI polls checkpoints every two seconds. New diagnostics require a backend process running the updated code; refreshing the UI alone only changes the labels. Avoid restarting an active benchmark just to obtain the diagnostics.
+
+
 Readiness waits at least three minutes after the last turn, then requires each session to have a searchable episode and an unchanged episode listing for one minute. It times out after 15 minutes. This is an observation heuristic, not proof that all semantic extraction has finished. Sessions for which the service creates no episode will time out even if that behavior is valid. Direct mode avoids background extraction and offers a separate baseline.
 
 ## Hosted configuration
