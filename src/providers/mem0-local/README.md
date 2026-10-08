@@ -17,14 +17,14 @@ The API defaults to `http://localhost:8888`. PostgreSQL, history, and Neo4j data
 remain in named volumes across recreation. The Compose file mounts the checked-in
 startup module and shared extraction instructions, so retain the repository layout.
 
-`OPENAI_API_KEY` and `OPENAI_BASE_URL` configure the server's extraction and
-embedding clients. The endpoint must accept OpenAI-style bearer authentication,
-chat completions with JSON output, and embeddings. Changing the endpoint does not
+`OPENAI_API_KEY` and `OPENAI_BASE_URL` configure extraction and, by default,
+embeddings. The extraction endpoint must accept chat completions with JSON output.
+Changing the endpoint does not
 change the configured model names. If your gateway requires the existing model
 credential in an additional header, set `MEM0_MODEL_API_KEY_HEADER=api-key`, or
 the header name specified by that gateway, before recreating the API container.
-The server sends the value of `OPENAI_API_KEY` in that header for extraction and
-embedding clients, including graph clients when enabled. Normal bearer
+The server sends the value of `OPENAI_API_KEY` in that header for extraction and,
+when sharing the same endpoint, embeddings. Normal bearer
 authentication remains present. Leave this setting empty for direct OpenAI use.
 `MEM0_LOCAL_API_KEY` controls authentication to mem0 and does not supply this header.
 
@@ -32,6 +32,84 @@ If the gateway expects a deployment alias instead of the pinned extraction model
 name, set `MEM0_EXTRACTION_MODEL`, for example `gpt-4.1-nano`. An empty value retains
 the pinned default. This does not change the embedding model or vector dimensions.
 Record the alias and its actual deployed model version with benchmark results.
+
+## Grove with Voyage embeddings
+
+Grove's Voyage API uses a separate URL and `x-api-key` header. It is independent
+of the Foundry extraction URL and its `api-key` header. Configure these values in
+your local `.env`, keeping real credentials out of Git:
+
+```dotenv
+# Extraction keeps its own OPENAI_BASE_URL and OPENAI_API_KEY.
+MEM0_MODEL_API_KEY_HEADER=api-key
+MEM0_EXTRACTION_MODEL=gpt-4.1-nano
+
+MEM0_EMBEDDING_BASE_URL=https://ai-gateway.corp.mongodb.com/voyage/v1
+MEM0_EMBEDDING_MODEL=voyage-4-lite
+MEM0_EMBEDDING_API_FORMAT=voyage
+MEM0_EMBEDDING_API_KEY_HEADER=x-api-key
+MEM0_EMBEDDING_DIMENSIONS=1024
+POSTGRES_COLLECTION_NAME=memories_voyage_4_lite_1024
+
+# If OPENAI_API_KEY already contains your Grove key:
+MEM0_EMBEDDING_API_KEY=${OPENAI_API_KEY}
+# Alternatively set AI_GATEWAY_API_KEY; Compose uses it when
+# MEM0_EMBEDDING_API_KEY is unset or empty.
+```
+
+Extraction and embedding keys may differ. A running container can retain an older
+key than the workspace `.env`; configure each explicitly if needed. Embeddings
+use `MEM0_EMBEDDING_API_KEY` when supplied, otherwise the server's
+`OPENAI_API_KEY`. A separate embedding URL does not inherit the extraction
+gateway's custom header. Set `MEM0_EMBEDDING_API_KEY_HEADER` for that endpoint.
+
+Recreate the API container after changing environment settings:
+
+```sh
+docker compose -f self-hosted/mem0/docker-compose.yml up -d --no-deps mem0
+bun run src/providers/mem0-local/validate.ts
+```
+
+The `voyage` format sends native Voyage fields: `model`, `input`, `input_type`,
+and `output_dimension`. Search calls use `input_type: query`; other embedding
+calls use `document`. It omits OpenAI's `encoding_format` field, because the Grove
+Voyage endpoint rejects the pinned mem0 client's `encoding_format: float`.
+The existing OpenAI client supplies HTTP transport, authentication, and retries.
+The embedder's configured provider remains `openai`; the startup module adapts its
+request format explicitly.
+
+Voyage documents 1,024 as the default dimension for `voyage-4-lite`, with 256,
+512, and 2,048 also supported by the model. Storage/index limits may further
+restrict usable sizes. See [Voyage's embedding API](https://docs.voyageai.com/reference/embeddings-api).
+This setup uses 1,024 and checks every returned vector before storage or search.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `MEM0_EMBEDDING_MODEL` | `text-embedding-3-small` | Model or deployment name |
+| `MEM0_EMBEDDING_BASE_URL` | Shared OpenAI endpoint | API prefix, without `/embeddings` |
+| `MEM0_EMBEDDING_API_FORMAT` | `openai` | `openai` or native `voyage` request fields |
+| `MEM0_EMBEDDING_API_KEY` | `AI_GATEWAY_API_KEY`, then server `OPENAI_API_KEY` | Embedding credential |
+| `MEM0_EMBEDDING_API_KEY_HEADER` | Shared custom header only when sharing the endpoint | Optional extra credential header |
+| `MEM0_EMBEDDING_DIMENSIONS` | 1536 | Expected vector size and PostgreSQL column size; also requested output size for `voyage` |
+| `POSTGRES_COLLECTION_NAME` | `memories` | Separate storage for each embedding configuration |
+
+Overriding the embedding model requires explicit dimensions and a dedicated
+collection. For the `openai` format, the dimension setting validates the model's
+returned size; it does not send a resizing request. For `voyage`, it also sets
+`output_dimension`.
+
+Use a new collection and fresh run IDs when changing models or dimensions. Equal
+dimensions do not make different models' vectors interchangeable. Startup rejects
+the generic `memories` and `mem0` collection names for custom embeddings; it cannot
+detect a different model previously used in an arbitrary named collection.
+Existing collections and memories remain intact. If graph mode is enabled, use a
+separate graph database for a changed embedding configuration as well.
+
+Live validation on October 8, 2026 passed with the Grove configuration above and
+graph extraction disabled. The test verified ingestion, retrieval across two
+sessions, a new adapter instance, namespace isolation, and scoped deletion. It
+cleaned up the synthetic memories afterward. This verifies the integration; it is
+not a LoCoMo accuracy result.
 
 ## Connect MemoryBench
 
@@ -85,8 +163,11 @@ This aligns instructions, not the providers' complete extraction implementations
 The standalone request's `prompt` field does not control ordinary fact extraction
 in this version. The adapter never calls `/configure` or updates shared settings.
 
-The pinned server uses mem0ai 1.0.11, extraction model
+The pinned server defaults to mem0ai 1.0.11, extraction model
 `gpt-4.1-nano-2025-04-14`, and embedding model `text-embedding-3-small`.
+For Grove/Voyage runs, record `gpt-4.1-nano`, `voyage-4-lite`, native Voyage request
+format, 1,024 dimensions, and the dedicated collection, together with the actual
+deployed model versions. These settings are part of the measured configuration.
 Record the deployed image, model gateway and model mappings, graph mode, instruction
 revision, and any server-side overrides with results. Repository defaults do not
 prove the configuration of an arbitrary remote endpoint.
