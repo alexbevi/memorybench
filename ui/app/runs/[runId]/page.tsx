@@ -301,20 +301,11 @@ export default function RunDetailPage() {
         </div>
       </div>
 
-      <p className="mb-4 text-sm text-text-secondary">
-        Stopping ends local benchmark work at the next stop check. In-flight requests may finish.
-        Accepted extraction jobs can continue on the provider; remote cancellation is not supported
-        by the current adapters. Deleting this run also leaves remote work and memories intact.
-      </p>
-
-      {run.admission && (
+      {isStopping && (
         <p className="mb-4 text-sm text-text-secondary">
-          Backlog policy: {run.admission.policy.mode} · {run.admission.decision} · waited{" "}
-          {Math.round(run.admission.waitMs / 1000)}s
+          Stopping local work. In-flight requests and provider jobs may still finish.
         </p>
       )}
-      <OperationalProgress summary={run.operational} />
-      <QueueHealth runId={runId} baseline={run.queue?.baseline} />
 
       {/* Error Display */}
       {runError && (
@@ -330,6 +321,31 @@ export default function RunDetailPage() {
 
       {/* Phase Progress */}
       <PhaseProgress summary={run.summary} questions={run.questions} isRunning={isRunning} />
+
+      <details className="mt-3 rounded border border-border px-4 py-3">
+        <summary className="cursor-pointer text-sm text-text-secondary hover:text-text-primary">
+          Run diagnostics
+          {run.admission?.decision === "waiting" && " · waiting for the service queue"}
+          {run.admission?.decision === "failed" && " · backlog admission failed"}
+          {!!run.operational?.attempts.at(-1)?.failedSessionUploads &&
+            ` · ${run.operational!.attempts.at(-1)!.failedSessionUploads} failed uploads`}
+        </summary>
+        <div className="mt-4 space-y-4">
+          <OperationalProgress summary={run.operational} />
+          <QueueHealth runId={runId} baseline={run.queue?.baseline} />
+          {run.admission && (
+            <p className="text-xs text-text-secondary">
+              Backlog policy: {run.admission.policy.mode} · {run.admission.decision} · waited{" "}
+              {Math.round(run.admission.waitMs / 1000)}s
+            </p>
+          )}
+          <p className="text-xs text-text-muted">
+            Stopping ends local work at the next stop check. In-flight requests and accepted
+            provider jobs may continue. Remote cancellation is not supported by the current
+            adapters. Deleting a run leaves remote work and memories intact.
+          </p>
+        </div>
+      </details>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border mt-8 mb-6">

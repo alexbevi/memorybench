@@ -4,7 +4,7 @@ export function OperationalProgress({ summary }: { summary: RunDetail["operation
   if (!latest) return null
   const seconds = (ms: number | null) => (ms === null ? "Unmeasured" : `${(ms / 1000).toFixed(1)}s`)
   return (
-    <div className="card mb-4 text-sm text-text-secondary">
+    <div className="text-sm text-text-secondary">
       <p className="font-medium">
         Operational progress · attempt {summary!.attempts.length} · {latest.outcome}
       </p>

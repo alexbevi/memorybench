@@ -35,7 +35,7 @@ export function QueueHealth({ runId, baseline }: { runId: string; baseline?: Que
           ? "Queue observation unsupported"
           : "Queue observation unavailable"
   return (
-    <div className="card mb-4 text-sm text-text-secondary">
+    <div className="text-sm text-text-secondary">
       <p className="font-medium">Service-wide extraction queue</p>
       <p aria-live="polite">{describe(current)}</p>
       {baseline && <p>Run baseline: {describe(baseline)}</p>}

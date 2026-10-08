@@ -65,8 +65,8 @@ export function PhaseProgress({ summary, questions, isRunning = false }: PhasePr
           animation: shimmer 2s linear infinite;
         }
       `}</style>
-      <h3 className="text-sm font-medium text-text-primary mb-4">Pipeline Progress</h3>
-      <div className="flex items-center gap-2">
+      <h3 className="text-sm font-medium text-text-primary mb-4">Pipeline progress</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {phases.map((phase) => {
           const count = summary[phase.key]
           const progress =
@@ -174,19 +174,19 @@ export function PhaseProgress({ summary, questions, isRunning = false }: PhasePr
           )
         })}
       </div>
-      {summary.indexingEpisodes && summary.indexingEpisodes.total > 0 && (
-        <p className="mt-3 text-xs text-text-secondary" aria-live="polite">
-          Readiness: {summary.indexingEpisodes.completed}/{summary.indexingEpisodes.total} receipts
-          confirmed ready · {summary.indexed}/{summary.total} questions ready
-          {summary.ingested < summary.total && " · checks begin after ingestion finishes"}
-        </p>
-      )}
-      {isRunning && readiness.length > 0 && (
-        <div className="mt-2 text-xs text-text-secondary" aria-live="polite">
-          <p>
-            Atlas readiness checks require a 180-second minimum wait after a session's last write,
-            searchable episodes, and 60 seconds of unchanged episode contents.
+      {summary.indexingEpisodes &&
+        summary.indexingEpisodes.total > 0 &&
+        summary.ingested === summary.total && (
+          <p className="mt-3 text-xs text-text-secondary" aria-live="polite">
+            Readiness: {summary.indexingEpisodes.completed}/{summary.indexingEpisodes.total}{" "}
+            receipts confirmed ready · {summary.indexed}/{summary.total} questions ready
           </p>
+        )}
+      {isRunning && readiness.length > 0 && (
+        <details className="mt-3 text-xs text-text-secondary">
+          <summary className="cursor-pointer">
+            Readiness details · {readiness.length} questions being checked
+          </summary>
           <ul className="mt-2 space-y-1">
             {readiness.map((q) => {
               const detail = q.phases.indexing.readiness!
@@ -211,24 +211,28 @@ export function PhaseProgress({ summary, questions, isRunning = false }: PhasePr
               )
             })}
           </ul>
-        </div>
+        </details>
       )}
       {ingestion && (ingestion.savedSessions > 0 || ingestion.active.length > 0) && (
         <div className="mt-3 text-xs text-text-secondary" aria-live="polite">
           <p>
             {ingestion.savedSessions} sessions saved · {summary.ingested}/{summary.total} questions
             fully ingested
+            {isRunning && ingestion.active.length > 0 && ` · ${ingestion.active.length} active`}
           </p>
           {isRunning && ingestion.active.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
-              {ingestion.active.map((question) => (
-                <li key={question.questionId}>
-                  <span className="font-mono">{question.questionId}</span>: {question.completed}
-                  {question.total !== undefined ? `/${question.total}` : ""} sessions
-                  {question.completed === 0 && " · processing first session"}
-                </li>
-              ))}
-            </ul>
+            <details className="mt-2">
+              <summary className="cursor-pointer">Session details</summary>
+              <ul className="mt-2 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                {ingestion.active.map((question) => (
+                  <li key={question.questionId}>
+                    <span className="font-mono">{question.questionId}</span>: {question.completed}
+                    {question.total !== undefined ? `/${question.total}` : ""} sessions
+                    {question.completed === 0 && " · processing first session"}
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
         </div>
       )}
