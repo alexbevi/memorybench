@@ -390,6 +390,16 @@ export default function CompareDetailPage() {
             Retrieval metrics judge relevance among returned records. Corpus recall and retrieval F1
             are unavailable, including for older reports.
           </p>
+          <div className="text-sm text-text-secondary mb-4">
+            {report.reports.map(({ provider, report: result }) => (
+              <p key={provider}>
+                {provider}: readiness {result.readinessPolicy?.method ?? "unrecorded"}.{" "}
+                {result.readinessPolicy?.extractionCompletionConfirmed
+                  ? "Extraction jobs completed."
+                  : "No server extraction-completion confirmation."}
+              </p>
+            ))}
+          </div>
           {/* Accuracy and Latency side by side */}
           <div className="flex gap-6">
             {/* Overall Accuracy - 35% width */}

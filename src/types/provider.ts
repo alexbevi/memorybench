@@ -32,7 +32,13 @@ export interface IndexingProgress {
 
 export type IndexingProgressCallback = (progress: IndexingProgress) => void
 
+export interface ReadinessPolicy {
+  method: "job-completion" | "searchable-receipts" | "stability-heuristic"
+  extractionCompletionConfirmed: boolean
+}
+
 export interface Provider {
+  readinessPolicy?: ReadinessPolicy
   name: string
   prompts?: ProviderPrompts
   concurrency?: ConcurrencyConfig

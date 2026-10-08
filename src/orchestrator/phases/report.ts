@@ -249,6 +249,7 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
     judge: checkpoint.judge,
     answeringModel: checkpoint.answeringModel,
     timestamp: new Date().toISOString(),
+    readinessPolicy: checkpoint.readinessPolicy,
     summary: {
       totalQuestions,
       correctCount,
@@ -298,6 +299,9 @@ export function printReport(result: BenchmarkResult): void {
   console.log("=".repeat(60))
   console.log(`Provider: ${result.provider}`)
   console.log(`Benchmark: ${result.benchmark}`)
+  console.log(
+    `Readiness: ${result.readinessPolicy?.method ?? "unrecorded"}. Extraction completion confirmed: ${result.readinessPolicy?.extractionCompletionConfirmed ?? false}`
+  )
   console.log(`Run ID: ${result.runId}`)
   console.log(`Data Source: ${result.dataSourceRunId}`)
   console.log(`Judge: ${result.judge}`)

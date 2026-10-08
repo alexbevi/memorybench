@@ -394,6 +394,7 @@ export interface CompareDetail extends CompareSummary {
 }
 
 export interface BenchmarkResult {
+  readinessPolicy?: { method: string; extractionCompletionConfirmed: boolean }
   runId: string
   provider: string
   benchmark: string

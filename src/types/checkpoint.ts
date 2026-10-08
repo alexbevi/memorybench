@@ -115,6 +115,7 @@ export interface SamplingConfig {
 }
 
 export interface RunCheckpoint {
+  readinessPolicy?: import("./provider").ReadinessPolicy
   runId: string
   dataSourceRunId: string
   status: RunStatus

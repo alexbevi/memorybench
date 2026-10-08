@@ -221,6 +221,13 @@ export class Orchestrator {
 
     const provider = createProvider(providerName)
     await provider.initialize(getProviderConfig(providerName))
+    if (
+      !Object.values(checkpoint.questions).some((q) => q.phases.indexing.status === "completed")
+    ) {
+      checkpoint.readinessPolicy = provider.readinessPolicy
+      this.checkpointManager.save(checkpoint)
+    }
+    logger.info(`Readiness method: ${checkpoint.readinessPolicy?.method ?? "unrecorded"}`)
 
     if (phases.includes("ingest")) {
       await runIngestPhase(

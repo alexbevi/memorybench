@@ -34,6 +34,10 @@ export interface Dependencies {
 
 export class AtlasAgentEngineDirectProvider implements Provider {
   name = "atlas-agent-engine-direct"
+  readinessPolicy: import("../../types/provider").ReadinessPolicy = {
+    method: "searchable-receipts",
+    extractionCompletionConfirmed: false,
+  }
   concurrency = { default: 2 }
   prompts = prompts
   protected sources = ["episodic"]
@@ -339,6 +343,10 @@ export class AtlasAgentEngineDirectProvider implements Provider {
 
 export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
   override name = "atlas-agent-engine"
+  override readinessPolicy: import("../../types/provider").ReadinessPolicy = {
+    method: "stability-heuristic",
+    extractionCompletionConfirmed: false,
+  }
   protected override sources = ["semantic", "episodic"]
   protected override prepare(session: UnifiedSession, scope: string): SessionState {
     const state = super.prepare(session, scope)

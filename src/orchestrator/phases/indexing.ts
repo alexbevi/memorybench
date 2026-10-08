@@ -183,6 +183,7 @@ export async function runIndexingPhase(
           })
         })
 
+        assertNoFailedReceipts(lastProgress)
         const durationMs = Date.now() - startTime
         checkpointManager.updatePhase(checkpoint, question.questionId, "indexing", {
           status: "completed",
@@ -212,4 +213,11 @@ export async function runIndexingPhase(
 
   tracker.finish()
   logger.success("Indexing phase complete")
+}
+
+export function assertNoFailedReceipts(progress: IndexingProgress): void {
+  if (progress.failedIds.length)
+    throw new Error(
+      `${progress.failedIds.length} ingestion receipts failed; refusing to evaluate incomplete data`
+    )
 }

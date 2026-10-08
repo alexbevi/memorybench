@@ -57,6 +57,7 @@ const CUSTOM_INSTRUCTIONS = `Generate personal memories that follow these guidel
 
 export class Mem0Provider implements Provider {
   name = "mem0"
+  readinessPolicy = { method: "job-completion" as const, extractionCompletionConfirmed: true }
   prompts = MEM0_PROMPTS
   concurrency = {
     default: 50,
@@ -169,7 +170,9 @@ export class Mem0Provider implements Provider {
     }
 
     if (failedIds.length > 0) {
-      logger.warn(`${failedIds.length} events failed indexing`)
+      throw new Error(
+        `${failedIds.length} Mem0 ingestion events failed; incomplete extraction cannot be evaluated`
+      )
     }
   }
 

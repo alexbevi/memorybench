@@ -98,6 +98,7 @@ export interface TokenMetrics {
 }
 
 export interface BenchmarkResult {
+  readinessPolicy?: import("./provider").ReadinessPolicy
   provider: string
   benchmark: string
   runId: string
