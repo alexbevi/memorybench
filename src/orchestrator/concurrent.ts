@@ -1,5 +1,5 @@
 import { logger } from "../utils/logger"
-import { shouldStop } from "../server/runState"
+import { shouldStop, assertRunNotStopped } from "../server/runState"
 
 export interface ConcurrentTaskContext<T> {
   item: T
@@ -97,6 +97,9 @@ export class ConcurrentExecutor {
       allResults.push(...successfulResults)
       logger.debug(`[${phaseName}] Completed batch ${batchIdx + 1}/${totalBatches}`, { runId })
       onBatchComplete?.(batchIdx, successfulResults)
+
+      // Catch stops during the final batch too, before a later phase can start.
+      assertRunNotStopped(runId)
 
       if (batchIdx < totalBatches - 1 && rateLimitMs > 0) {
         logger.debug(`[${phaseName}] Waiting ${rateLimitMs}ms before next batch`)

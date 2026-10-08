@@ -58,3 +58,12 @@ export function getActiveRunsWithBenchmarks(): Array<{ runId: string; benchmark:
   }
   return result
 }
+
+// Cooperative stop: retain acknowledgements from in-flight requests before calling this.
+export function assertRunNotStopped(runId: string): void {
+  if (shouldStop(runId)) {
+    throw new Error(
+      "Run stopped by user. Accepted remote extraction jobs are not cancelled. Resume with the same run ID."
+    )
+  }
+}

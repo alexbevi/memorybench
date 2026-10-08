@@ -24,3 +24,14 @@ test("unsupported remote cancellation does not silently stop local work", () => 
   expect(stopLocalRun(id, null).status).toBe(400)
   expect(stopLocalRun("missing", {}).status).toBe(404)
 })
+
+test("a stop during the final batch prevents successful phase completion", async () => {
+  const { ConcurrentExecutor } = await import("../orchestrator/concurrent")
+  startRun(id)
+  await expect(
+    ConcurrentExecutor.execute([1], 1, id, "test", async () => {
+      stopLocalRun(id)
+      return "receipt saved"
+    })
+  ).rejects.toThrow("stopped by user")
+})

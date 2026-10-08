@@ -1,3 +1,4 @@
+import { assertRunNotStopped } from "../../server/runState"
 import type { Provider, IndexingProgress } from "../../types/provider"
 import type { RunCheckpoint, QuestionCheckpoint } from "../../types/checkpoint"
 import { CheckpointManager } from "../checkpoint"
@@ -182,6 +183,7 @@ export async function runIndexingPhase(
             failedIds: progress.failedIds,
             readiness: progress.readiness,
           })
+          assertRunNotStopped(checkpoint.runId)
         })
 
         assertNoFailedReceipts(lastProgress)

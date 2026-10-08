@@ -1,3 +1,4 @@
+import { assertRunNotStopped } from "../../server/runState"
 import { diagnose } from "../../utils/diagnostics"
 import type { Provider, IngestResult } from "../../types/provider"
 import type { Benchmark } from "../../types/benchmark"
@@ -73,6 +74,7 @@ export async function runIngestPhase(
         }
 
         for (const session of sessions) {
+          assertRunNotStopped(checkpoint.runId)
           if (completedSessions.includes(session.sessionId)) {
             continue
           }

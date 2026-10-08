@@ -107,3 +107,11 @@ Use a new run ID for a fresh dataset or connection. Keep both the run checkpoint
 For indexing timeouts, check embedding configuration, extraction workers and service logs, then resume. A nonempty conversation may legitimately yield no episode; this adapter conservatively fails readiness in that case. For corrupted manifests, preserve the files and investigate before retrying. A fresh run avoids reusing uncertain receipts but leaves previous remote data intact.
 
 See [Agent Memory](https://www.mongodb.com/docs/agentengine/add-features/memory-types/#std-label-agentic-platform-memory), the [JavaScript SDK overview](https://www.mongodb.com/docs/agentengine/sdk/javascript/), and the [memory package source](https://github.com/mongodb/agent-engine-client-libraries/tree/main/javascript/packages/agent-engine-memory) for service behavior and SDK capabilities.
+
+## Stopping benchmark work versus cancelling extraction
+
+The run page's **Stop local work** action requests a cooperative stop. Ingestion stops before the next session upload, after retaining receipts for the in-flight session. Readiness polling stops at the next provider progress callback; other phases finish their in-flight batch before stopping. Requests already sent to the service may finish.
+
+`POST /api/runs/:runId/stop` accepts `{"scope":"local"}`; an empty body retains that behavior for older clients. Its response explicitly states that remote extraction was not cancelled. Requests with `scope` set to `remote` or `all` return HTTP 409 without requesting a local stop. The current provider adapters expose no remote cancellation operation.
+
+Stopping or deleting a benchmark run does not remove recorded turns, cancel queued snapshots or extraction, or delete memories. Atlas's installed public SDK does not expose queue cancellation. An abandoned large run can therefore continue consuming worker capacity and delay later samples. Do not start replacement runs expecting a clean queue. Remote cleanup requires a separately scoped administrative procedure that accounts for running jobs and for queued work that can be regenerated from retained turns; deleting queue rows alone is not a cancellation protocol.

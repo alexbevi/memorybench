@@ -80,3 +80,99 @@ test("resume retains receipts from completed sessions through indexing", async (
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+test("local stop saves the in-flight receipt and prevents later sessions from uploading", async () => {
+  const { startRun, requestStop, endRun } = await import("../../server/runState")
+  const directory = mkdtempSync(join(tmpdir(), "memorybench-stop-"))
+  const manager = new CheckpointManager(directory)
+  const id = "stop-between-sessions"
+  startRun(id)
+  try {
+    const checkpoint = manager.create(id, "fake", "fake", "gpt-4o", "gpt-4o")
+    const question = {
+      questionId: "q",
+      question: "Where?",
+      groundTruth: "Boston",
+      questionType: "single",
+      haystackSessionIds: ["s1", "s2"],
+    }
+    manager.initQuestion(checkpoint, "q", `q-${id}`, question)
+    const benchmark: Benchmark = {
+      name: "fake",
+      load: async () => {},
+      getQuestions: () => [question],
+      getHaystackSessions: () => ["s1", "s2"].map((sessionId) => ({ sessionId, messages: [] })),
+      getGroundTruth: () => "Boston",
+      getQuestionTypes: () => ({}),
+    }
+    const calls: string[] = []
+    const provider: Provider = {
+      name: "fake",
+      initialize: async () => {},
+      clear: async () => {},
+      search: async () => [],
+      ingest: async ([session]) => {
+        calls.push(session.sessionId)
+        requestStop(id)
+        return { documentIds: [session.sessionId] }
+      },
+      awaitIndexing: async () => {},
+    }
+    await expect(runIngestPhase(provider, benchmark, checkpoint, manager)).rejects.toThrow(
+      "stopped by user"
+    )
+    await manager.flush()
+    const saved = manager.load(id)!
+    expect(calls).toEqual(["s1"])
+    expect(saved.questions.q.phases.ingest.completedSessions).toEqual(["s1"])
+    expect(saved.questions.q.phases.ingest.ingestResult?.documentIds).toEqual(["s1"])
+    endRun(id)
+    await runIngestPhase(provider, benchmark, saved, manager)
+    expect(calls).toEqual(["s1", "s2"])
+  } finally {
+    endRun(id)
+    await manager.flush()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("local stop interrupts readiness at the next provider progress callback", async () => {
+  const { startRun, requestStop, endRun } = await import("../../server/runState")
+  const directory = mkdtempSync(join(tmpdir(), "memorybench-stop-index-"))
+  const manager = new CheckpointManager(directory)
+  const id = "stop-readiness"
+  startRun(id)
+  try {
+    const checkpoint = manager.create(id, "fake", "fake", "gpt-4o", "gpt-4o")
+    manager.initQuestion(checkpoint, "q", `q-${id}`, {
+      question: "Where?",
+      groundTruth: "Boston",
+      questionType: "single",
+    })
+    checkpoint.questions.q.phases.ingest = {
+      status: "completed",
+      completedSessions: ["s1"],
+      ingestResult: { documentIds: ["receipt"] },
+    }
+    let polledAgain = false
+    const provider: Provider = {
+      name: "fake",
+      initialize: async () => {},
+      clear: async () => {},
+      search: async () => [],
+      ingest: async () => ({ documentIds: [] }),
+      awaitIndexing: async (_result, _tag, progress) => {
+        requestStop(id)
+        progress?.({ completedIds: [], failedIds: [], total: 1 })
+        polledAgain = true
+      },
+    }
+    await expect(runIndexingPhase(provider, checkpoint, manager)).rejects.toThrow("stopped by user")
+    expect(polledAgain).toBe(false)
+    expect(checkpoint.questions.q.phases.indexing.status).toBe("failed")
+  } finally {
+    endRun(id)
+    await manager.flush()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
