@@ -1,3 +1,5 @@
+export type { Workload } from "../../src/orchestrator/workload"
+import type { Workload } from "../../src/orchestrator/workload"
 export type { QueueObservation } from "../../src/types/provider"
 import type { QueueObservation } from "../../src/types/provider"
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
@@ -53,6 +55,8 @@ export interface QuestionCheckpoint {
 }
 
 export interface RunDetail extends RunSummary {
+  workload?: Workload
+  admission?: import("../../src/orchestrator/admission").Admission
   queue?: { baseline: QueueObservation; latest: QueueObservation }
   questions: Record<string, QuestionCheckpoint>
 }
@@ -186,6 +190,8 @@ export interface ConcurrencyConfig {
 }
 
 export async function startRun(params: {
+  backlogPolicy?: { mode: "warn" | "wait" | "proceed"; timeoutMs: number }
+  expectedDatasetHash?: string
   provider: string
   benchmark: string
   runId: string
@@ -534,4 +540,17 @@ export async function deleteCompare(compareId: string): Promise<void> {
 
 export function getRunQueue(runId: string): Promise<QueueObservation> {
   return fetchApi(`/api/runs/${encodeURIComponent(runId)}/queue`)
+}
+
+export interface WorkloadPreview {
+  workload: Workload
+  datasetHash: string
+  queue: QueueObservation
+}
+export function previewRun(params: {
+  provider: string
+  benchmark: string
+  sampling?: SamplingConfig
+}): Promise<WorkloadPreview> {
+  return fetchApi("/api/runs/preview", { method: "POST", body: JSON.stringify(params) })
 }

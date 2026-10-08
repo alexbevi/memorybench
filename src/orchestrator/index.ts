@@ -1,3 +1,6 @@
+import { estimateWorkload } from "./workload"
+import { admitWork, backlogPolicy, type BacklogPolicy } from "./admission"
+import { assertRunNotStopped } from "../server/runState"
 import { monitorQueue } from "./queue"
 import { assertRequestedPhasesComplete } from "./completion"
 import { captureProvenance, PROCESS_PROVENANCE, datasetHash } from "../utils/provenance"
@@ -22,6 +25,7 @@ import { runEvaluatePhase } from "./phases/evaluate"
 import { generateReport, saveReport, printReport } from "./phases/report"
 
 export interface OrchestratorOptions {
+  backlogPolicy?: BacklogPolicy
   searchMeasurement?: import("./search-measurement").SearchMeasurement
   expectedDatasetHash?: string
   provider: ProviderName
@@ -247,6 +251,13 @@ export class Orchestrator {
       logger.warn("Legacy run has no provenance; do not compare it as a controlled run")
     }
     const provider = createProvider(providerName)
+    checkpoint.workload = estimateWorkload(
+      benchmark,
+      targetQuestionIds ?? allQuestions.map((q) => q.questionId),
+      provider
+    )
+    logger.info("Planned workload", { ...checkpoint.workload })
+
     await provider.initialize(getProviderConfig(providerName))
     if (
       !Object.values(checkpoint.questions).some((q) => q.phases.indexing.status === "completed")
@@ -264,6 +275,17 @@ export class Orchestrator {
     })
     try {
       if (phases.includes("ingest")) {
+        await admitWork(
+          provider,
+          backlogPolicy(options.backlogPolicy ?? checkpoint.admission?.policy),
+          (state) => {
+            checkpoint.admission = state
+            this.checkpointManager.save(checkpoint)
+            if (state.decision === "warned")
+              logger.warn("Proceeding with backlog or unknown queue state; counts are service-wide")
+          },
+          { checkStop: () => assertRunNotStopped(runId) }
+        )
         await runIngestPhase(
           provider,
           benchmark,

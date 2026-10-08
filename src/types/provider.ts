@@ -47,6 +47,7 @@ export interface ReadinessPolicy {
 }
 
 export interface Provider {
+  estimateWrites?(sessions: UnifiedSession[]): { count: number; unit: string }
   observeQueue?(): Promise<QueueObservation>
   readinessPolicy?: ReadinessPolicy
   name: string

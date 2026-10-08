@@ -60,6 +60,12 @@ export class AtlasAgentEngineDirectProvider implements Provider {
     this.memory = new Memory({ ...options, fetchImpl: compatibleFetch(this.deps.fetchImpl) })
   }
 
+  estimateWrites(sessions: UnifiedSession[]) {
+    return {
+      count: sessions.reduce((n, s) => n + transcriptChunks(s).length, 0),
+      unit: "episode writes",
+    }
+  }
   async observeQueue() {
     return readAtlasQueue(this.queueConnection)
   }
@@ -350,6 +356,9 @@ export class AtlasAgentEngineDirectProvider implements Provider {
 
 export class AtlasAgentEngineProvider extends AtlasAgentEngineDirectProvider {
   override name = "atlas-agent-engine"
+  override estimateWrites(sessions: UnifiedSession[]) {
+    return { count: sessions.reduce((n, s) => n + turns(s).length, 0), unit: "turn writes" }
+  }
   override readinessPolicy: import("../../types/provider").ReadinessPolicy = {
     method: "stability-heuristic",
     extractionCompletionConfirmed: false,

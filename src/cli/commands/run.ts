@@ -1,3 +1,4 @@
+import { backlogPolicy } from "../../orchestrator/admission"
 import type { ProviderName } from "../../types/provider"
 import type { BenchmarkName } from "../../types/benchmark"
 import type { PhaseId, SamplingConfig, SampleType } from "../../types/checkpoint"
@@ -12,6 +13,8 @@ import { logger } from "../../utils/logger"
 const DEFAULT_JUDGE_MODEL = "gpt-4o"
 
 interface RunArgs {
+  backlogMode?: "warn" | "wait" | "proceed"
+  backlogTimeoutMs?: number
   provider?: string
   benchmark?: string
   judgeModel?: string
@@ -38,7 +41,11 @@ export function parseRunArgs(args: string[]): RunArgs | null {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
-    if (arg === "-p" || arg === "--provider") {
+    if (arg === "--backlog-policy") {
+      parsed.backlogMode = args[++i] as RunArgs["backlogMode"]
+    } else if (arg === "--backlog-timeout-seconds") {
+      parsed.backlogTimeoutMs = Number(args[++i]) * 1000
+    } else if (arg === "-p" || arg === "--provider") {
       parsed.provider = args[++i]
     } else if (arg === "-b" || arg === "--benchmark") {
       parsed.benchmark = args[++i]
@@ -123,6 +130,8 @@ export async function runCommand(args: string[]): Promise<void> {
     console.log("  --sample-type          Sample type: consecutive (default), random")
     console.log("  -l, --limit            Limit total number of questions to process")
     console.log(`  -f, --from-phase       Start from phase: ${PHASE_ORDER.join(", ")}`)
+    console.log("  --backlog-policy warn|wait|proceed   Admission policy (default: warn)")
+    console.log("  --backlog-timeout-seconds N         Queue wait limit (default: 300)")
     console.log("  --concurrency N        Default concurrency for all phases")
     console.log("  --concurrency-ingest N    Concurrency for ingest phase")
     console.log("  --concurrency-indexing N  Concurrency for indexing phase")
@@ -200,6 +209,10 @@ export async function runCommand(args: string[]): Promise<void> {
   }
 
   await orchestrator.run({
+    backlogPolicy:
+      parsed.backlogMode || parsed.backlogTimeoutMs !== undefined
+        ? backlogPolicy({ mode: parsed.backlogMode, timeoutMs: parsed.backlogTimeoutMs })
+        : undefined,
     provider: parsed.provider as ProviderName,
     benchmark: parsed.benchmark as BenchmarkName,
     judgeModel: parsed.judgeModel!,

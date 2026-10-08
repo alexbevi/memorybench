@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
+  previewRun,
+  type WorkloadPreview,
   getProviders,
   getBenchmarks,
   getModels,
@@ -220,6 +222,21 @@ export default function NewRunPage() {
 
   const displayRunId = form.runId || (form.provider && form.benchmark ? generateRunId() : "run-id")
 
+  const [preview, setPreview] = useState<{ key: string; value: WorkloadPreview }>()
+  const [backlogMode, setBacklogMode] = useState<"warn" | "wait" | "proceed">("warn")
+  const [backlogTimeout, setBacklogTimeout] = useState(300)
+  useEffect(
+    () => setPreview(undefined),
+    [
+      form.provider,
+      form.benchmark,
+      form.selectionMode,
+      form.perCategory,
+      form.sampleType,
+      form.limit,
+    ]
+  )
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
@@ -300,7 +317,15 @@ export default function NewRunPage() {
       setSubmitting(true)
       setError(null)
 
+      const previewKey = JSON.stringify({ provider, benchmark, sampling })
+      if (activeTab === "new" && preview?.key !== previewKey) {
+        setPreview({ key: previewKey, value: await previewRun({ provider, benchmark, sampling }) })
+        setSubmitting(false)
+        return
+      }
       await startRun({
+        backlogPolicy: { mode: backlogMode, timeoutMs: backlogTimeout * 1000 },
+        expectedDatasetHash: activeTab === "new" ? preview?.value.datasetHash : undefined,
         provider,
         benchmark,
         runId,
@@ -395,6 +420,67 @@ export default function NewRunPage() {
         </button>
       </div>
 
+      {activeTab === "new" && preview && (
+        <div className="card mb-4 text-sm">
+          <p className="font-medium">Planned workload</p>
+          <p>
+            {preview.value.workload.questions.toLocaleString()} questions ·{" "}
+            {preview.value.workload.distinctHistories.toLocaleString()} distinct histories
+          </p>
+          <p>
+            {preview.value.workload.sessions.toLocaleString()} session uploads ·{" "}
+            {preview.value.workload.messages.toLocaleString()} messages
+          </p>
+          <p>
+            {preview.value.workload.writes
+              ? `${preview.value.workload.writes.count.toLocaleString()} estimated ${preview.value.workload.writes.unit}`
+              : "Provider write count unavailable"}
+          </p>
+          <p>
+            Each question receives its own history copy;{" "}
+            {preview.value.workload.repeatedHistories.toLocaleString()} repeated histories.
+            Concurrency changes throughput, not this workload.
+          </p>
+          <p>
+            Service queue:{" "}
+            {preview.value.queue.status === "available"
+              ? `${preview.value.queue.queued} queued, ${preview.value.queue.running} running, ${preview.value.queue.failed} failed (includes other runs)`
+              : preview.value.queue.status}
+            . Rechecked at start.
+          </p>
+        </div>
+      )}
+      <div className="card mb-4 text-sm">
+        <label>
+          Existing backlog{" "}
+          <select
+            className="input ml-2"
+            value={backlogMode}
+            onChange={(e) => setBacklogMode(e.target.value as typeof backlogMode)}
+          >
+            <option value="warn">Warn and continue</option>
+            <option value="wait">Wait for a quiet queue</option>
+            <option value="proceed">Proceed deliberately</option>
+          </select>
+        </label>
+        {backlogMode === "wait" && (
+          <label className="ml-3">
+            Timeout seconds{" "}
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={3600}
+              value={backlogTimeout}
+              onChange={(e) => setBacklogTimeout(Number(e.target.value))}
+            />
+          </label>
+        )}
+        <p>
+          Wait requires queue observation support. This policy does not establish extraction
+          completeness.
+        </p>
+      </div>
       <form onSubmit={handleSubmit} className="space-y-6">
         {activeTab === "advanced" && (
           <>
@@ -1132,7 +1218,13 @@ export default function NewRunPage() {
                     d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
                   />
                 </svg>
-                <span>{activeTab === "advanced" ? "Continue Run" : "Start Run"}</span>
+                <span>
+                  {activeTab === "advanced"
+                    ? "Continue Run"
+                    : preview
+                      ? "Start reviewed run"
+                      : "Preview workload"}
+                </span>
               </>
             )}
           </button>

@@ -123,6 +123,8 @@ export interface SamplingConfig {
 }
 
 export interface RunCheckpoint {
+  workload?: import("../orchestrator/workload").Workload
+  admission?: import("../orchestrator/admission").Admission
   queue?: {
     baseline: import("./provider").QueueObservation
     latest: import("./provider").QueueObservation

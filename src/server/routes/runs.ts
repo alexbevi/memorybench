@@ -1,3 +1,7 @@
+import { estimateWorkload } from "../../orchestrator/workload"
+import { backlogPolicy, type BacklogPolicy } from "../../orchestrator/admission"
+import { selectQuestionsBySampling } from "../../orchestrator/sampling"
+import { datasetHash } from "../../utils/provenance"
 import { createProvider } from "../../providers"
 import { getProviderConfig } from "../../utils/config"
 import { observeQueue } from "../../orchestrator/queue"
@@ -192,6 +196,31 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
     })
   }
 
+  if (method === "POST" && pathname === "/api/runs/preview") {
+    try {
+      const body = await req.json()
+      const benchmark = createBenchmark(body.benchmark)
+      const provider = createProvider(body.provider)
+      await benchmark.load()
+      const ids = selectQuestionsBySampling(
+        benchmark.getQuestions(),
+        body.sampling ?? { mode: "full" }
+      )
+      const workload = estimateWorkload(benchmark, ids, provider)
+      if (provider.observeQueue) await provider.initialize(getProviderConfig(body.provider))
+      return json({
+        workload,
+        datasetHash: datasetHash(benchmark),
+        queue: await observeQueue(provider),
+      })
+    } catch {
+      return json(
+        { error: "Cannot preview workload: check provider, benchmark and selection" },
+        400
+      )
+    }
+  }
+
   // POST /api/runs/start - Start new run
   if (method === "POST" && pathname === "/api/runs/start") {
     try {
@@ -288,11 +317,15 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
         await checkpointManager.flush(runId)
       }
 
+      const admissionPolicy =
+        body.backlogPolicy === undefined ? undefined : backlogPolicy(body.backlogPolicy)
       startRun(runId, benchmark)
 
       runBenchmark({
         provider: provider as ProviderName,
         benchmark: benchmark as BenchmarkName,
+        backlogPolicy: admissionPolicy,
+        expectedDatasetHash: body.expectedDatasetHash,
         runId,
         judgeModel,
         answeringModel,
@@ -390,6 +423,8 @@ function getRunStatus(checkpoint: any, summary: any): string {
 }
 
 async function runBenchmark(options: {
+  backlogPolicy?: BacklogPolicy
+  expectedDatasetHash?: string
   provider: ProviderName
   benchmark: BenchmarkName
   runId: string
@@ -407,6 +442,8 @@ async function runBenchmark(options: {
       runId: options.runId,
       provider: options.provider,
       benchmark: options.benchmark,
+      backlogPolicy: options.backlogPolicy,
+      expectedDatasetHash: options.expectedDatasetHash,
     })
 
     const phases = options.fromPhase ? getPhasesFromPhase(options.fromPhase) : undefined
@@ -414,6 +451,8 @@ async function runBenchmark(options: {
     await orchestrator.run({
       provider: options.provider,
       benchmark: options.benchmark,
+      backlogPolicy: options.backlogPolicy,
+      expectedDatasetHash: options.expectedDatasetHash,
       runId: options.runId,
       judgeModel: options.judgeModel,
       answeringModel: options.answeringModel,

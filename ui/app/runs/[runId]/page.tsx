@@ -306,6 +306,12 @@ export default function RunDetailPage() {
         by the current adapters. Deleting this run also leaves remote work and memories intact.
       </p>
 
+      {run.admission && (
+        <p className="mb-4 text-sm text-text-secondary">
+          Backlog policy: {run.admission.policy.mode} · {run.admission.decision} · waited{" "}
+          {Math.round(run.admission.waitMs / 1000)}s
+        </p>
+      )}
       <QueueHealth runId={runId} baseline={run.queue?.baseline} />
 
       {/* Error Display */}
