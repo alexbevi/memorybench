@@ -1,3 +1,5 @@
+export type { QueueObservation } from "../../src/types/provider"
+import type { QueueObservation } from "../../src/types/provider"
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
 export interface RunSummary {
@@ -51,6 +53,7 @@ export interface QuestionCheckpoint {
 }
 
 export interface RunDetail extends RunSummary {
+  queue?: { baseline: QueueObservation; latest: QueueObservation }
   questions: Record<string, QuestionCheckpoint>
 }
 
@@ -527,4 +530,8 @@ export async function resumeCompare(compareId: string): Promise<{ message: strin
 
 export async function deleteCompare(compareId: string): Promise<void> {
   await fetchApi(`/api/compare/${encodeURIComponent(compareId)}`, { method: "DELETE" })
+}
+
+export function getRunQueue(runId: string): Promise<QueueObservation> {
+  return fetchApi(`/api/runs/${encodeURIComponent(runId)}/queue`)
 }

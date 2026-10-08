@@ -1,3 +1,4 @@
+import { monitorQueue } from "./queue"
 import { assertRequestedPhasesComplete } from "./completion"
 import { captureProvenance, PROCESS_PROVENANCE, datasetHash } from "../utils/provenance"
 import { selectQuestionsBySampling, DEFAULT_SAMPLE_SEED } from "./sampling"
@@ -254,74 +255,89 @@ export class Orchestrator {
       this.checkpointManager.save(checkpoint)
     }
     logger.info(`Readiness method: ${checkpoint.readinessPolicy?.method ?? "unrecorded"}`)
-
-    if (phases.includes("ingest")) {
-      await runIngestPhase(
-        provider,
-        benchmark,
-        checkpoint,
-        this.checkpointManager,
-        targetQuestionIds
-      )
-    }
-
-    if (phases.includes("indexing")) {
-      await runIndexingPhase(provider, checkpoint, this.checkpointManager, targetQuestionIds)
-    }
-
-    if (phases.includes("search")) {
-      await runSearchPhase(
-        provider,
-        benchmark,
-        checkpoint,
-        this.checkpointManager,
-        targetQuestionIds
-      )
-    }
-
-    if (phases.includes("answer")) {
-      await runAnswerPhase(
-        benchmark,
-        checkpoint,
-        this.checkpointManager,
-        targetQuestionIds,
-        provider
-      )
-    }
-
-    if (phases.includes("evaluate")) {
-      const judge = createJudge(judgeName)
-      const judgeConfig = getJudgeConfig(judgeName)
-      judgeConfig.model = judgeModel
-      await judge.initialize(judgeConfig)
-      await runEvaluatePhase(
-        judge,
-        benchmark,
-        checkpoint,
-        this.checkpointManager,
-        targetQuestionIds,
-        provider
-      )
-    }
-
+    const stopQueueMonitor = await monitorQueue(provider, (observation) => {
+      checkpoint.queue = {
+        baseline: checkpoint.queue?.baseline ?? observation,
+        latest: observation,
+      }
+      this.checkpointManager.save(checkpoint)
+    })
     try {
-      assertRequestedPhasesComplete(checkpoint, phases, targetQuestionIds ?? allQuestions.map((q) => q.questionId))
-    } catch (error) {
-      this.checkpointManager.updateStatus(checkpoint, "failed")
+      if (phases.includes("ingest")) {
+        await runIngestPhase(
+          provider,
+          benchmark,
+          checkpoint,
+          this.checkpointManager,
+          targetQuestionIds
+        )
+      }
+
+      if (phases.includes("indexing")) {
+        await runIndexingPhase(provider, checkpoint, this.checkpointManager, targetQuestionIds)
+      }
+
+      if (phases.includes("search")) {
+        await runSearchPhase(
+          provider,
+          benchmark,
+          checkpoint,
+          this.checkpointManager,
+          targetQuestionIds
+        )
+      }
+
+      if (phases.includes("answer")) {
+        await runAnswerPhase(
+          benchmark,
+          checkpoint,
+          this.checkpointManager,
+          targetQuestionIds,
+          provider
+        )
+      }
+
+      if (phases.includes("evaluate")) {
+        const judge = createJudge(judgeName)
+        const judgeConfig = getJudgeConfig(judgeName)
+        judgeConfig.model = judgeModel
+        await judge.initialize(judgeConfig)
+        await runEvaluatePhase(
+          judge,
+          benchmark,
+          checkpoint,
+          this.checkpointManager,
+          targetQuestionIds,
+          provider
+        )
+      }
+
+      try {
+        assertRequestedPhasesComplete(
+          checkpoint,
+          phases,
+          targetQuestionIds ?? allQuestions.map((q) => q.questionId)
+        )
+      } catch (error) {
+        this.checkpointManager.updateStatus(checkpoint, "failed")
+        await this.checkpointManager.flush(checkpoint.runId)
+        throw error
+      }
+
+      if (phases.includes("report")) {
+        const report = generateReport(benchmark, checkpoint)
+        saveReport(report)
+        printReport(report)
+      }
+
+      // Flush all pending checkpoint saves before marking as complete
       await this.checkpointManager.flush(checkpoint.runId)
-      throw error
+      this.checkpointManager.updateStatus(checkpoint, "completed")
+      logger.success("Run complete!")
+    } finally {
+      await stopQueueMonitor()
+      await this.checkpointManager.flush(checkpoint.runId)
     }
-
-    if (phases.includes("report")) {
-      const report = generateReport(benchmark, checkpoint)
-      saveReport(report)
-      printReport(report)
-    }
-
-    // Flush all pending checkpoint saves before marking as complete
-    await this.checkpointManager.flush(checkpoint.runId)
-    this.checkpointManager.updateStatus(checkpoint, "completed")
-    logger.success("Run complete!")
   }
 
   async ingest(

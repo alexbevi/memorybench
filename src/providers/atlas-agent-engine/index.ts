@@ -1,3 +1,4 @@
+import { readAtlasQueue } from "./queue"
 import { compatibleFetch } from "./transport"
 import { diagnose } from "../../utils/diagnostics"
 import { logger } from "../../utils/logger"
@@ -42,6 +43,7 @@ export class AtlasAgentEngineDirectProvider implements Provider {
   prompts = prompts
   protected sources = ["episodic"]
   protected memory!: Memory
+  protected queueConnection!: ReturnType<typeof connectionOptions>
   protected connection!: string
   protected store: Store
   protected now: () => number
@@ -53,8 +55,13 @@ export class AtlasAgentEngineDirectProvider implements Provider {
   }
   async initialize(config: ProviderConfig) {
     const options = connectionOptions(config)
+    this.queueConnection = options
     this.connection = digest([options.baseUrl, options.projectId, this.name, 1])
     this.memory = new Memory({ ...options, fetchImpl: compatibleFetch(this.deps.fetchImpl) })
+  }
+
+  async observeQueue() {
+    return readAtlasQueue(this.queueConnection)
   }
 
   protected scope(tag: string) {

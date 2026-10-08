@@ -1,5 +1,7 @@
 "use client"
 
+import { QueueHealth } from "@/components/queue-health"
+
 import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
@@ -303,6 +305,8 @@ export default function RunDetailPage() {
         Accepted extraction jobs can continue on the provider; remote cancellation is not supported
         by the current adapters. Deleting this run also leaves remote work and memories intact.
       </p>
+
+      <QueueHealth runId={runId} baseline={run.queue?.baseline} />
 
       {/* Error Display */}
       {runError && (

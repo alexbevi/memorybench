@@ -47,6 +47,7 @@ export interface ReadinessPolicy {
 }
 
 export interface Provider {
+  observeQueue?(): Promise<QueueObservation>
   readinessPolicy?: ReadinessPolicy
   name: string
   prompts?: ProviderPrompts
@@ -71,3 +72,8 @@ export type ProviderName =
   | "rag"
   | "atlas-agent-engine-direct"
   | "atlas-agent-engine"
+
+export type QueueObservation = { scope: "service"; checkedAt: string } & (
+  | { status: "available"; queued: number; running: number; failed: number }
+  | { status: "unsupported" | "unavailable"; reason?: string }
+)

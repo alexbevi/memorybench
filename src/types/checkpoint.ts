@@ -123,6 +123,10 @@ export interface SamplingConfig {
 }
 
 export interface RunCheckpoint {
+  queue?: {
+    baseline: import("./provider").QueueObservation
+    latest: import("./provider").QueueObservation
+  }
   searchMeasurement?: import("../orchestrator/search-measurement").SearchMeasurement
   provenance?: import("../utils/provenance").RunProvenance
   readinessPolicy?: import("./provider").ReadinessPolicy

@@ -1,3 +1,6 @@
+import { createProvider } from "../../providers"
+import { getProviderConfig } from "../../utils/config"
+import { observeQueue } from "../../orchestrator/queue"
 import { cancellationCapabilities, stopLocalRun } from "../stop"
 import { logger } from "../../utils/logger"
 import { existsSync, readFileSync, readdirSync } from "fs"
@@ -73,6 +76,15 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
       .sort((a: any, b: any) => (b.createdAt || "").localeCompare(a.createdAt || ""))
 
     return json(runDetails)
+  }
+
+  const queueMatch = pathname.match(/^\/api\/runs\/([^/]+)\/queue$/)
+  if (method === "GET" && queueMatch) {
+    const checkpoint = checkpointManager.load(decodeURIComponent(queueMatch[1]))
+    if (!checkpoint) return json({ error: "Run not found" }, 404)
+    const provider = createProvider(checkpoint.provider as ProviderName)
+    if (provider.observeQueue) await provider.initialize(getProviderConfig(checkpoint.provider))
+    return json(await observeQueue(provider))
   }
 
   // GET /api/runs/:runId - Get checkpoint
