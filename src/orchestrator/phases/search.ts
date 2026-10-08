@@ -58,7 +58,6 @@ export async function runSearchPhase(
         const results = await provider.search(question.question, {
           containerTag,
           limit: 10,
-          threshold: 0.3,
         })
 
         const durationMs = Date.now() - startTime
