@@ -426,6 +426,39 @@ export default function CompareDetailPage() {
               </details>
             ))}
           </div>
+          {report.pairedComparisons?.map((pair) => (
+            <section key={pair.providers.join(":")} className="mb-6 text-sm">
+              <h3 className="font-semibold">Paired results: {pair.providers.join(" vs ")}</h3>
+              <p>
+                {pair.matchedQuestions} matching questions. Both correct: {pair.bothCorrect}; both
+                incorrect: {pair.bothIncorrect}. Only {pair.providers[0]} correct:{" "}
+                {pair.leftOnlyCorrect}; only {pair.providers[1]} correct: {pair.rightOnlyCorrect}.
+              </p>
+              {pair.warnings.map((w) => (
+                <p key={w} className="text-status-warning">
+                  {w}
+                </p>
+              ))}
+              <details>
+                <summary>Inspect {pair.disagreements.length} disagreements</summary>
+                {pair.disagreements.map((q) => (
+                  <div key={q.questionId} className="my-3 border-b border-border pb-3">
+                    <p>
+                      {q.questionId}: {q.question}
+                    </p>
+                    <p>
+                      {pair.providers[0]} ({q.leftCorrect ? "correct" : "incorrect"}):{" "}
+                      {q.leftAnswer}
+                    </p>
+                    <p>
+                      {pair.providers[1]} ({q.leftCorrect ? "incorrect" : "correct"}):{" "}
+                      {q.rightAnswer}
+                    </p>
+                  </div>
+                ))}
+              </details>
+            </section>
+          ))}
           {/* Accuracy and Latency side by side */}
           <div className="flex gap-6">
             {/* Overall Accuracy - 35% width */}

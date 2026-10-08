@@ -1,3 +1,4 @@
+import { pairedComparisons } from "./paired-comparison"
 import { datasetHash, PROCESS_PROVENANCE } from "../utils/provenance"
 import {
   comparisonExecutionOptions,
@@ -279,6 +280,12 @@ export class BatchManager {
       return
     }
 
+    for (const pair of pairedComparisons(reports)) {
+      console.log(
+        `Paired ${pair.providers.join(" vs ")}: ${pair.matchedQuestions} questions, ${pair.leftOnlyCorrect} vs ${pair.rightOnlyCorrect} exclusive correct answers`
+      )
+      for (const warning of pair.warnings) logger.warn(warning)
+    }
     const providerWidth = Math.max(15, ...reports.map(({ provider }) => provider.length))
     const pad = (s: string, n: number) => s.padEnd(n)
     const padNum = (n: number, width: number) => n.toString().padStart(width)
@@ -537,7 +544,7 @@ export class BatchManager {
     if (bestAccuracy) {
       const bestReport = reports.find((r) => r.provider === bestAccuracy)?.report
       console.log(
-        `WINNER: ${bestAccuracy} (${(bestReport!.summary.accuracy * 100).toFixed(1)}% overall accuracy)`
+        `Highest observed sample accuracy: ${bestAccuracy} (${(bestReport!.summary.accuracy * 100).toFixed(1)}% overall accuracy)`
       )
     }
     console.log("═".repeat(80) + "\n")

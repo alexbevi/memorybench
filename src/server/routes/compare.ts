@@ -1,3 +1,4 @@
+import { pairedComparisons } from "../../orchestrator/paired-comparison"
 import { existsSync, readdirSync } from "fs"
 import { join } from "path"
 import { CheckpointManager } from "../../orchestrator/checkpoint"
@@ -278,6 +279,7 @@ export async function handleCompareRoutes(req: Request, url: URL): Promise<Respo
       benchmark: manifest.benchmark,
       judge: manifest.judge,
       answeringModel: manifest.answeringModel,
+      pairedComparisons: pairedComparisons(reports),
       reports: reports.map((r) => ({
         provider: r.provider,
         report: r.report,

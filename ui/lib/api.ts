@@ -445,6 +445,24 @@ export interface BenchmarkResult {
 }
 
 export interface CompareReport {
+  pairedComparisons?: Array<{
+    providers: [string, string]
+    matchedQuestions: number
+    conversations: number
+    leftOnlyCorrect: number
+    rightOnlyCorrect: number
+    bothCorrect: number
+    bothIncorrect: number
+    accuracyDifference: number
+    warnings: string[]
+    disagreements: Array<{
+      questionId: string
+      question: string
+      leftAnswer: string
+      rightAnswer: string
+      leftCorrect: boolean
+    }>
+  }>
   compareId: string
   benchmark: string
   judge: string
