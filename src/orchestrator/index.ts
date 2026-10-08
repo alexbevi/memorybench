@@ -1,3 +1,4 @@
+import { selectQuestionsBySampling, DEFAULT_SAMPLE_SEED } from "./sampling"
 import type { ProviderName } from "../types/provider"
 import type { BenchmarkName } from "../types/benchmark"
 import type { JudgeName } from "../types/judge"
@@ -29,40 +30,6 @@ export interface OrchestratorOptions {
   force?: boolean
   questionIds?: string[]
   phases?: ("ingest" | "indexing" | "search" | "answer" | "evaluate" | "report")[]
-}
-
-function selectQuestionsBySampling(
-  allQuestions: { questionId: string; questionType: string }[],
-  sampling: SamplingConfig
-): string[] {
-  if (sampling.mode === "full") {
-    return allQuestions.map((q) => q.questionId)
-  }
-
-  if (sampling.mode === "limit" && sampling.limit) {
-    return allQuestions.slice(0, sampling.limit).map((q) => q.questionId)
-  }
-
-  if (sampling.mode === "sample" && sampling.perCategory) {
-    const byType: Record<string, { questionId: string; questionType: string }[]> = {}
-    for (const q of allQuestions) {
-      if (!byType[q.questionType]) byType[q.questionType] = []
-      byType[q.questionType].push(q)
-    }
-
-    const selected: string[] = []
-    for (const questions of Object.values(byType)) {
-      if (sampling.sampleType === "random") {
-        const shuffled = [...questions].sort(() => Math.random() - 0.5)
-        selected.push(...shuffled.slice(0, sampling.perCategory).map((q) => q.questionId))
-      } else {
-        selected.push(...questions.slice(0, sampling.perCategory).map((q) => q.questionId))
-      }
-    }
-    return selected
-  }
-
-  return allQuestions.map((q) => q.questionId)
 }
 
 export class Orchestrator {
@@ -218,7 +185,10 @@ export class Orchestrator {
       } else if (sampling) {
         logger.info(`Using sampling mode: ${sampling.mode}`)
         targetQuestionIds = selectQuestionsBySampling(allQuestions, sampling)
-        checkpoint.sampling = sampling
+        checkpoint.sampling =
+          sampling.mode === "sample"
+            ? { ...sampling, seed: sampling.seed ?? DEFAULT_SAMPLE_SEED }
+            : sampling
         logger.info(
           `Sampling selected ${targetQuestionIds.length} questions from ${allQuestions.length} total`
         )

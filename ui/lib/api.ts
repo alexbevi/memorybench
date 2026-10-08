@@ -150,9 +150,10 @@ export const PHASE_ORDER: PhaseId[] = [
 ]
 
 export type SelectionMode = "full" | "sample" | "limit"
-export type SampleType = "consecutive" | "random"
+export type SampleType = "consecutive" | "random" | "stratified"
 
 export interface SamplingConfig {
+  seed?: string
   mode: SelectionMode
   sampleType?: SampleType
   perCategory?: number

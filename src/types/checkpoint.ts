@@ -104,9 +104,10 @@ export interface QuestionCheckpoint {
 export type RunStatus = "initializing" | "running" | "completed" | "failed"
 
 export type SelectionMode = "full" | "sample" | "limit"
-export type SampleType = "consecutive" | "random"
+export type SampleType = "consecutive" | "random" | "stratified"
 
 export interface SamplingConfig {
+  seed?: string
   mode: SelectionMode
   sampleType?: SampleType
   perCategory?: number

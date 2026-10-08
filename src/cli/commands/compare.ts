@@ -16,6 +16,7 @@ interface CompareArgs {
   answeringModel: string
   compareId?: string
   sample?: number
+  seed?: string
   sampleType?: SampleType
   limit?: number
   force?: boolean
@@ -44,14 +45,16 @@ export function parseCompareArgs(args: string[]): CompareArgs | null {
       parsed.sample = parseInt(args[++i], 10)
     } else if (arg === "--sample-type") {
       const type = args[++i] as SampleType
-      if (type === "consecutive" || type === "random") {
+      if (type === "consecutive" || type === "random" || type === "stratified") {
         parsed.sampleType = type
       } else {
-        logger.error(`Invalid sample type: ${type}. Valid types: consecutive, random`)
+        logger.error(`Invalid sample type: ${type}. Valid types: consecutive, random, stratified`)
         return null
       }
     } else if (arg === "-l" || arg === "--limit") {
       parsed.limit = parseInt(args[++i], 10)
+    } else if (arg === "--seed") {
+      parsed.seed = args[++i]
     } else if (arg === "--force") {
       parsed.force = true
     }
@@ -81,8 +84,9 @@ export async function compareCommand(args: string[]): Promise<void> {
     console.log(`  -b, --benchmark       Benchmark: ${getAvailableBenchmarks().join(", ")}`)
     console.log(`  -j, --judge           Judge model (default: ${DEFAULT_JUDGE_MODEL})`)
     console.log(`  -m, --answering-model Answering model (default: ${DEFAULT_ANSWERING_MODEL})`)
+    console.log("  --seed               Reproducible sampling seed (default: memorybench-v1)")
     console.log("  -s, --sample          Sample N questions per category")
-    console.log("  --sample-type         Sample type: consecutive (default), random")
+    console.log("  --sample-type         Sample type: stratified (default), consecutive, random")
     console.log("  -l, --limit           Limit total number of questions")
     console.log("  --compare-id          Compare ID (for resuming)")
     console.log("  --force               Clear existing comparison and start fresh")
@@ -120,7 +124,8 @@ export async function compareCommand(args: string[]): Promise<void> {
       if (parsed.sample) {
         sampling = {
           mode: "sample",
-          sampleType: parsed.sampleType || "consecutive",
+          sampleType: parsed.sampleType || "stratified",
+          seed: parsed.seed,
           perCategory: parsed.sample,
         }
       } else if (parsed.limit) {

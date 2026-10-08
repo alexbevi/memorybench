@@ -32,8 +32,9 @@ export default function NewComparePage() {
     judgeModel: "gpt-4o",
     answeringModel: "gpt-4o",
     selectionMode: "full" as SelectionMode,
-    sampleType: "consecutive" as SampleType,
-    perCategory: "2",
+    sampleType: "stratified" as SampleType,
+    seed: "memorybench-v1",
+    perCategory: "20",
     limit: "",
   })
 
@@ -100,6 +101,7 @@ export default function NewComparePage() {
       sampling = {
         mode: "sample",
         sampleType: form.sampleType,
+        seed: form.seed,
         perCategory: perCategoryValue,
       }
     } else if (form.selectionMode === "limit" && form.limit) {
@@ -307,7 +309,7 @@ export default function NewComparePage() {
               />
               <span className="text-sm text-text-secondary mr-8">per category</span>
               <div className="flex gap-0">
-                {(["consecutive", "random"] as SampleType[]).map((type) => {
+                {(["stratified", "consecutive", "random"] as SampleType[]).map((type) => {
                   const isSelected = form.sampleType === type
                   return (
                     <button
@@ -328,6 +330,21 @@ export default function NewComparePage() {
                 })}
               </div>
             </div>
+          )}
+
+          {form.selectionMode === "sample" && (
+            <label className="block text-sm text-text-secondary mt-3">
+              Sampling seed
+              <input
+                className="input mt-1"
+                value={form.seed}
+                onChange={(e) => setForm({ ...form, seed: e.target.value })}
+              />
+              <span className="block mt-1">
+                Stratified sampling spreads each category across conversations where available. The
+                same seed reproduces the same sample.
+              </span>
+            </label>
           )}
 
           {form.selectionMode === "limit" && (
