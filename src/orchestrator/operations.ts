@@ -40,6 +40,8 @@ export function operationalSummary(checkpoint: RunCheckpoint, now = Date.now()) 
     latencyUnit: "provider session upload call",
     percentileEstimator: "linear interpolation",
     workload: checkpoint.workload,
+    executionPolicy: checkpoint.executionPolicy,
+    concurrency: checkpoint.concurrency,
     queue: checkpoint.queue,
     admission: checkpoint.admission,
     readinessPolicy: checkpoint.readinessPolicy,

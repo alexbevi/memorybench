@@ -21,6 +21,60 @@ export interface ConcurrentExecutionOptions<T, R> {
 }
 
 export class ConcurrentExecutor {
+  // Refill a free slot without waiting for slower tasks. On failure, stop
+  // scheduling but await every in-flight task so it can persist its receipts.
+  static async executePool<T, R>(
+    options: Omit<ConcurrentExecutionOptions<T, R>, "onBatchStart" | "onBatchComplete">
+  ): Promise<R[]> {
+    const {
+      items,
+      concurrency,
+      rateLimitMs,
+      runId,
+      phaseName,
+      executeTask,
+      onTaskComplete,
+      onError,
+    } = options
+    if (!Number.isSafeInteger(concurrency) || concurrency <= 0)
+      throw new Error("Concurrency must be a positive integer")
+    if (!Number.isFinite(rateLimitMs) || rateLimitMs < 0)
+      throw new Error("Worker cooldown must be nonnegative")
+    assertRunNotStopped(runId)
+    const results = new Array<R>(items.length)
+    let next = 0
+    let firstError: Error | undefined
+    logger.info(
+      `[${phaseName}] Processing ${items.length} items with ${concurrency} bounded workers (cooldown: ${rateLimitMs}ms per worker)`
+    )
+    const worker = async () => {
+      while (next < items.length && !firstError && !shouldStop(runId)) {
+        const index = next++
+        const context = { item: items[index], index, total: items.length }
+        try {
+          const result = await executeTask(context)
+          results[index] = result
+          onTaskComplete?.(context, result)
+        } catch (error) {
+          const failure = error instanceof Error ? error : new Error(String(error))
+          firstError ??= failure
+          onError?.(context, failure)
+          return
+        }
+        if (next < items.length && !firstError && !shouldStop(runId) && rateLimitMs > 0)
+          await new Promise((resolve) => setTimeout(resolve, rateLimitMs))
+      }
+    }
+    const settled = await Promise.allSettled(
+      Array.from({ length: Math.min(items.length, concurrency) }, worker)
+    )
+    if (firstError) throw firstError
+    const rejected = settled.find((r) => r.status === "rejected")
+    if (rejected?.status === "rejected") throw rejected.reason
+    assertRunNotStopped(runId)
+    return results
+  }
+
   /**
    * Execute tasks concurrently in batches with rate limiting
    * Throws on first error (fail-fast), but ensures in-flight operations complete
@@ -120,7 +174,7 @@ export class ConcurrentExecutor {
     phaseName: string,
     executeTask: (context: ConcurrentTaskContext<T>) => Promise<R>
   ): Promise<R[]> {
-    return this.executeBatched({
+    return this.executePool({
       items,
       concurrency,
       rateLimitMs: 0,

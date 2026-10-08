@@ -36,7 +36,7 @@ export async function runIngestPhase(
 
   logger.info(`Ingesting ${pendingQuestions.length} questions (concurrency: ${concurrency})...`)
 
-  await ConcurrentExecutor.executeBatched({
+  await ConcurrentExecutor.executePool({
     items: pendingQuestions,
     concurrency,
     rateLimitMs: RATE_LIMIT_MS,

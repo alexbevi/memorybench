@@ -124,6 +124,7 @@ export interface SamplingConfig {
 }
 
 export interface RunCheckpoint {
+  executionPolicy?: { scheduler: "bounded-workers-v1"; ingestionWorkerCooldownMs: number }
   operationalAttempts?: import("../orchestrator/operations").OperationalAttempt[]
   workload?: import("../orchestrator/workload").Workload
   admission?: import("../orchestrator/admission").Admission

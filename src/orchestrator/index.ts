@@ -259,6 +259,10 @@ export class Orchestrator {
       targetQuestionIds ?? allQuestions.map((q) => q.questionId),
       provider
     )
+    checkpoint.executionPolicy = {
+      scheduler: "bounded-workers-v1",
+      ingestionWorkerCooldownMs: 1000,
+    }
     logger.info("Planned workload", { ...checkpoint.workload })
 
     await provider.initialize(getProviderConfig(providerName))
