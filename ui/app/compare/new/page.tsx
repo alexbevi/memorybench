@@ -35,6 +35,8 @@ export default function NewComparePage() {
     sampleType: "stratified" as SampleType,
     seed: "memorybench-v1",
     concurrency: "2",
+    searchWarmups: "0",
+    searchRepetitions: "1",
     execution: "sequential" as "sequential" | "parallel",
     perCategory: "20",
     limit: "",
@@ -126,6 +128,10 @@ export default function NewComparePage() {
         sampling,
         concurrency: Number(form.concurrency),
         execution: form.execution,
+        searchMeasurement: {
+          warmupRequests: Number(form.searchWarmups),
+          repetitions: Number(form.searchRepetitions),
+        },
       })
 
       router.push(`/compare`)
@@ -395,6 +401,36 @@ export default function NewComparePage() {
           <p className="col-span-2 text-sm text-text-secondary">
             Sequential runs avoid competition between these providers. Keep unrelated benchmark runs
             stopped when measuring latency.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm text-text-secondary">
+            Search warmups
+            <input
+              type="number"
+              min="0"
+              max="10"
+              required
+              className="input mt-1"
+              value={form.searchWarmups}
+              onChange={(e) => setForm({ ...form, searchWarmups: e.target.value })}
+            />
+          </label>
+          <label className="text-sm text-text-secondary">
+            Measured searches per question
+            <input
+              type="number"
+              min="1"
+              max="20"
+              required
+              className="input mt-1"
+              value={form.searchRepetitions}
+              onChange={(e) => setForm({ ...form, searchRepetitions: e.target.value })}
+            />
+          </label>
+          <p className="col-span-2 text-sm text-text-secondary">
+            Only measured requests contribute to search latency. Answers use the first measured
+            result. No warmup does not guarantee cold caches after indexing.
           </p>
         </div>
         {error && (

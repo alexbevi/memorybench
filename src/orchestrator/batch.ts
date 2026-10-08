@@ -1,3 +1,4 @@
+import { searchMeasurementOptions, type SearchMeasurement } from "./search-measurement"
 import { pairedComparisons } from "./paired-comparison"
 import { datasetHash, PROCESS_PROVENANCE } from "../utils/provenance"
 import {
@@ -23,6 +24,7 @@ const COMPARE_DIR = "./data/compare"
 const RUNS_DIR = "./data/runs"
 
 export interface CompareManifest {
+  searchMeasurement?: SearchMeasurement
   code?: typeof PROCESS_PROVENANCE
   datasetHash?: string
   compareId: string
@@ -42,6 +44,7 @@ export interface CompareManifest {
 }
 
 export interface CompareOptions {
+  searchMeasurement?: SearchMeasurement
   providers: ProviderName[]
   benchmark: BenchmarkName
   judgeModel: string
@@ -140,6 +143,7 @@ export class BatchManager {
           } as SamplingConfig)
         : options.sampling
     const executionOptions = comparisonExecutionOptions(options.concurrency, options.execution)
+    const searchMeasurement = searchMeasurementOptions(options.searchMeasurement)
     const compareId = generateCompareId()
 
     logger.info(`Loading benchmark: ${benchmark}`)
@@ -166,6 +170,7 @@ export class BatchManager {
       code: PROCESS_PROVENANCE,
       datasetHash: datasetHash(benchmarkInstance),
       ...executionOptions,
+      searchMeasurement,
       runs: providers.map((provider) => ({
         provider,
         runId: `${compareId}-${provider}`,
@@ -216,6 +221,7 @@ export class BatchManager {
             answeringModel: manifest.answeringModel,
             questionIds: manifest.targetQuestionIds,
             expectedDatasetHash: manifest.datasetHash,
+            searchMeasurement: manifest.searchMeasurement,
             concurrency:
               manifest.concurrency === undefined ? undefined : { default: manifest.concurrency },
           })

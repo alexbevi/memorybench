@@ -16,6 +16,8 @@ interface CompareArgs {
   answeringModel: string
   compareId?: string
   sample?: number
+  searchWarmups?: number
+  searchRepetitions?: number
   concurrency?: number
   execution?: "sequential" | "parallel"
   seed?: string
@@ -55,6 +57,10 @@ export function parseCompareArgs(args: string[]): CompareArgs | null {
       }
     } else if (arg === "-l" || arg === "--limit") {
       parsed.limit = parseInt(args[++i], 10)
+    } else if (arg === "--search-warmups") {
+      parsed.searchWarmups = Number(args[++i])
+    } else if (arg === "--search-repetitions") {
+      parsed.searchRepetitions = Number(args[++i])
     } else if (arg === "--concurrency" || arg === "-c") {
       parsed.concurrency = Number(args[++i])
     } else if (arg === "--execution") {
@@ -92,6 +98,8 @@ export async function compareCommand(args: string[]): Promise<void> {
     console.log(`  -b, --benchmark       Benchmark: ${getAvailableBenchmarks().join(", ")}`)
     console.log(`  -j, --judge           Judge model (default: ${DEFAULT_JUDGE_MODEL})`)
     console.log(`  -m, --answering-model Answering model (default: ${DEFAULT_ANSWERING_MODEL})`)
+    console.log("  --search-warmups      Untimed searches per question, 0–10 (default: 0)")
+    console.log("  --search-repetitions  Measured searches per question, 1–20 (default: 1)")
     console.log("  -c, --concurrency    Shared per-provider concurrency (default: 2)")
     console.log("  --execution          sequential (default) or parallel provider runs")
     console.log("  --seed               Reproducible sampling seed (default: memorybench-v1)")
@@ -148,6 +156,10 @@ export async function compareCommand(args: string[]): Promise<void> {
       result = await batchManager.compare({
         providers: parsed.providers as ProviderName[],
         benchmark: parsed.benchmark as BenchmarkName,
+        searchMeasurement: {
+          warmupRequests: parsed.searchWarmups ?? 0,
+          repetitions: parsed.searchRepetitions ?? 1,
+        },
         concurrency: parsed.concurrency,
         execution: parsed.execution,
         judgeModel: parsed.judgeModel,

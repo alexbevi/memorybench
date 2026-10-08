@@ -100,6 +100,11 @@ export function pairedComparisons(
         result.warnings.push(
           "Readiness methods differ; indexing latency is not the same operation for both providers."
         )
+      if (
+        JSON.stringify(left.report.searchMeasurement) !==
+        JSON.stringify(right.report.searchMeasurement)
+      )
+        result.warnings.push("Search warmup or repetition settings differ.")
       pairs.push(result)
     }
   return pairs

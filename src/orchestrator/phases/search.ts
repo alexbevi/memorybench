@@ -1,3 +1,4 @@
+import { measureSearch } from "../search-measurement"
 import { writeFileSync, mkdirSync, existsSync } from "fs"
 import { join } from "path"
 import type { Provider } from "../../types/provider"
@@ -48,19 +49,20 @@ export async function runSearchPhase(
     async ({ item: question, index, total }) => {
       const containerTag = `${question.questionId}-${checkpoint.dataSourceRunId}`
 
-      const startTime = Date.now()
       checkpointManager.updatePhase(checkpoint, question.questionId, "search", {
         status: "in_progress",
         startedAt: new Date().toISOString(),
       })
 
       try {
-        const results = await provider.search(question.question, {
-          containerTag,
-          limit: 10,
-        })
+        const { results, samples } = await measureSearch(
+          provider,
+          question.question,
+          { containerTag, limit: 10 },
+          checkpoint.searchMeasurement
+        )
 
-        const durationMs = Date.now() - startTime
+        const durationMs = samples[0]
         const resultFile = join(resultsDir, `${question.questionId}.json`)
         const resultData = {
           questionId: question.questionId,
@@ -70,6 +72,7 @@ export async function runSearchPhase(
           containerTag,
           timestamp: new Date().toISOString(),
           durationMs,
+          latencySamplesMs: samples,
           results,
         }
 
@@ -79,11 +82,16 @@ export async function runSearchPhase(
           status: "completed",
           resultFile,
           results,
+          latencySamplesMs: samples,
           completedAt: new Date().toISOString(),
           durationMs,
         })
 
-        logger.progress(index + 1, total, `Searched ${question.questionId} (${durationMs}ms)`)
+        logger.progress(
+          index + 1,
+          total,
+          `Searched ${question.questionId} (${Math.round(durationMs)}ms)`
+        )
         return { questionId: question.questionId, durationMs }
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e)

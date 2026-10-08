@@ -139,7 +139,8 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
 
     if (ingestPhase.durationMs) ingestDurations.push(ingestPhase.durationMs)
     if (indexingPhase.durationMs) indexingDurations.push(indexingPhase.durationMs)
-    if (searchPhase.durationMs) searchDurations.push(searchPhase.durationMs)
+    if (searchPhase.latencySamplesMs?.length) searchDurations.push(...searchPhase.latencySamplesMs)
+    else if (searchPhase.durationMs) searchDurations.push(searchPhase.durationMs)
     if (answerPhase.durationMs) answerDurations.push(answerPhase.durationMs)
     if (evalPhase.durationMs) evaluateDurations.push(evalPhase.durationMs)
     if (totalDurationMs > 0) totalDurations.push(totalDurationMs)
@@ -260,6 +261,7 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
     answeringModel: checkpoint.answeringModel,
     timestamp: new Date().toISOString(),
     readinessPolicy: checkpoint.readinessPolicy,
+    searchMeasurement: checkpoint.searchMeasurement,
     provenance: checkpoint.provenance,
     summary: {
       totalQuestions,
@@ -314,6 +316,9 @@ export function printReport(result: BenchmarkResult): void {
       `Answer F1 (${result.answerF1.version}, ${result.answerF1.count} answerable questions): ${(100 * result.answerF1.mean).toFixed(1)}%`
     )
   console.log(`Benchmark: ${result.benchmark}`)
+  console.log(
+    `Search measurement: ${result.searchMeasurement?.warmupRequests ?? 0} explicit warmups, ${result.searchMeasurement?.repetitions ?? 1} measured requests per question; server caches are not reset`
+  )
   console.log(
     `Readiness: ${result.readinessPolicy?.method ?? "unrecorded"}. Extraction completion confirmed: ${result.readinessPolicy?.extractionCompletionConfirmed ?? false}`
   )

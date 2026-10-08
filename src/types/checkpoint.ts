@@ -43,6 +43,7 @@ export interface IndexingPhaseCheckpoint {
 }
 
 export interface SearchPhaseCheckpoint {
+  latencySamplesMs?: number[]
   status: PhaseStatus
   resultFile?: string
   results?: SearchResult[]
@@ -117,6 +118,7 @@ export interface SamplingConfig {
 }
 
 export interface RunCheckpoint {
+  searchMeasurement?: import("../orchestrator/search-measurement").SearchMeasurement
   provenance?: import("../utils/provenance").RunProvenance
   readinessPolicy?: import("./provider").ReadinessPolicy
   runId: string

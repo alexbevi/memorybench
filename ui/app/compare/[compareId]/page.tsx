@@ -459,6 +459,15 @@ export default function CompareDetailPage() {
               </details>
             </section>
           ))}
+          <div className="text-sm text-text-secondary mb-4">
+            {report.reports.map(({ provider, report: result }) => (
+              <p key={provider}>
+                {provider}: {result.searchMeasurement?.warmupRequests ?? 0} explicit search warmups,{" "}
+                {result.searchMeasurement?.repetitions ?? 1} measured searches per question. Latency
+                includes all measured searches; server caches were not reset.
+              </p>
+            ))}
+          </div>
           {/* Accuracy and Latency side by side */}
           <div className="flex gap-6">
             {/* Overall Accuracy - 35% width */}

@@ -156,6 +156,7 @@ export async function handleCompareRoutes(req: Request, url: URL): Promise<Respo
         force,
         concurrency,
         execution,
+        searchMeasurement,
       } = body
 
       if (!providers || !Array.isArray(providers) || providers.length === 0) {
@@ -177,6 +178,7 @@ export async function handleCompareRoutes(req: Request, url: URL): Promise<Respo
         sampling,
         concurrency,
         execution,
+        searchMeasurement,
         force,
       })
 
@@ -402,6 +404,7 @@ async function initializeComparison(options: {
   judgeModel: string
   answeringModel: string
   sampling?: SamplingConfig
+  searchMeasurement?: import("../../orchestrator/search-measurement").SearchMeasurement
   concurrency?: number
   execution?: "sequential" | "parallel"
   force?: boolean

@@ -20,6 +20,7 @@ import { runEvaluatePhase } from "./phases/evaluate"
 import { generateReport, saveReport, printReport } from "./phases/report"
 
 export interface OrchestratorOptions {
+  searchMeasurement?: import("./search-measurement").SearchMeasurement
   expectedDatasetHash?: string
   provider: ProviderName
   benchmark: BenchmarkName
@@ -102,6 +103,8 @@ export class Orchestrator {
         answeringModel,
         { limit, sampling, concurrency, status: "initializing" }
       )
+      checkpoint.searchMeasurement = options.searchMeasurement
+      this.checkpointManager.save(checkpoint)
       logger.info("Created checkpoint (initializing)")
     }
 
@@ -236,6 +239,7 @@ export class Orchestrator {
         targetQuestionIds ?? allQuestions.map((q) => q.questionId),
         getProviderConfig(providerName)
       )
+      checkpoint.provenance.measurement = `after-readiness; explicit-warmups=${checkpoint.searchMeasurement?.warmupRequests ?? 0}; measured-repetitions=${checkpoint.searchMeasurement?.repetitions ?? 1}; server-cache-state-uncontrolled`
       this.checkpointManager.save(checkpoint)
     } else {
       logger.warn("Legacy run has no provenance; do not compare it as a controlled run")

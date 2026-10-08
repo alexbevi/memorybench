@@ -388,12 +388,14 @@ export interface CompareSummary {
 export interface CompareDetail extends CompareSummary {
   concurrency?: number
   execution?: "sequential" | "parallel"
+  searchMeasurement?: { warmupRequests: number; repetitions: number }
   sampling?: SamplingConfig
   targetQuestionIds?: string[]
   runs: CompareRunInfo[]
 }
 
 export interface BenchmarkResult {
+  searchMeasurement?: { warmupRequests: number; repetitions: number }
   provenance?: {
     code: { revision: string; sourceHash: string; dirty: boolean; startedAt: string }
     datasetHash: string
@@ -493,6 +495,7 @@ export async function startCompare(params: {
   answeringModel?: string
   concurrency?: number
   execution?: "sequential" | "parallel"
+  searchMeasurement?: { warmupRequests: number; repetitions: number }
   sampling?: SamplingConfig
 }): Promise<{ message: string; compareId: string }> {
   return fetchApi("/api/compare/start", {
