@@ -33,6 +33,31 @@ Both LoCoMo personas currently use the `user` transport role, with their distinc
 
 For adversarial items, the adapter sets the expected answer to "Not mentioned in the conversation" rather than using the dataset's distractor answer. The default judge accepts abstention. For temporal items, the default judge allows certain off-by-one duration errors. Our primary score is binary LLM-judged answer accuracy; the original project's displayed QA results use answer F1. These are different scoring protocols, so published LoCoMo percentages cannot be compared directly with ours. See the [judge instructions](../../src/prompts/defaults.ts) and [original evaluation](https://snap-research.github.io/locomo/).
 
+## How LoCoMo is scored
+
+The [official QA evaluator](https://github.com/snap-research/locomo/blob/main/task_eval/evaluation.py) uses normalized, Porter-stemmed token-overlap F1. Normalization lowercases text, removes punctuation and the words `a`, `an`, `the`, and `and`, and collapses whitespace. Repeated tokens count toward overlap.
+
+Category handling matters. Single-hop and temporal answers use whole-answer F1. Open-domain references use the text before the first semicolon. Multi-hop predictions and references split on commas; each reference part receives its best matching prediction-part F1, and those scores are averaged. Adversarial cases receive a binary score based on whether the lowercased prediction contains `no information available` or `not mentioned`. This is a literal phrase check, not semantic abstention recognition.
+
+Publish two clearly labeled views on the same generated answers:
+
+- **LoCoMo scoring under official metric semantics.** Record the evaluator revision, normalization, category handling, included categories, and denominator. Any implementation claiming parity needs verification against that evaluator.
+- **LoCoMo LLM-judged accuracy.** Use the same judge model and category rubric across providers. Record the prompt version and any provider overrides; the same model alone does not ensure the same grading.
+
+F1 can penalize a valid paraphrase that shares few words with the reference. A judge can recognize equivalent meaning but introduces its own model behavior. Inspect disagreements between the measures rather than treating either as an interchangeable accuracy percentage.
+
+### What MemoryBench currently reports
+
+The [local scorer](../../src/benchmarks/locomo/scoring.ts) produces `locomo-style-porter-js-v1` alongside the judge score. It follows the category-specific F1 aggregation but uses a JavaScript Porter stemmer rather than the official evaluator's NLTK variant. It excludes adversarial questions from F1. Report this as **LoCoMo-style answer F1, answerable questions only**, not official LoCoMo scoring. The [report aggregator](../../src/orchestrator/phases/report.ts) records its mean, count, and version. Older completed evaluations may lack it; do not count missing values as zero.
+
+The adapter converts answer references to strings and replaces adversarial references with an abstention target. Document these input transformations when adding official scoring. The existing judge accepts abstention more broadly and allows certain off-by-one temporal duration errors. Those judge decisions do not change token F1.
+
+### Questions share conversation histories
+
+The 1,986 questions draw on only ten conversation histories. Report both question counts and conversation coverage, with per-conversation results and category denominators. Questions about the same history share source material and failure modes; they are not independent user histories.
+
+For provider differences, preserve pairing on the same question IDs. Estimate uncertainty by resampling conversations as clusters, retaining their questions and provider pairing, and state whether the aggregate weights questions or conversations equally. With only ten clusters, even cluster-based intervals warrant cautious interpretation. A one-conversation diagnostic sample cannot estimate variation across conversations. The current report does not calculate cluster-aware confidence intervals; this is a reporting requirement for broader claims, not an existing feature.
+
 ## A question that explains the benchmark
 
 Consider `conv-26-q0`, which asks when Caroline attended the LGBTQ support group. The supporting turn says she went "yesterday" in a session dated May 8, 2023. The reference answer is May 7, 2023.

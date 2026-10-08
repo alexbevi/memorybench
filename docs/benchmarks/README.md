@@ -62,6 +62,8 @@ The [provider registry](../../src/providers/index.ts) links these IDs to their i
 | Completion coverage | Evaluated questions divided by intended questions | Report separately; report accuracy uses evaluated questions |
 | Hit@K and MRR | Whether the judge finds relevant retrieved material, and how early it appears | Relevant material may still lack the fact needed for a correct answer |
 
+For LoCoMo, distinguish official metric semantics, the currently implemented `locomo-style-porter-js-v1` answer F1, and LLM-judged accuracy. The local F1 excludes adversarial questions and uses a different stemmer from the official evaluator. Publish its version and scored count; do not label it official LoCoMo F1. See [scoring and conversation-level uncertainty](locomo.md#how-locomo-is-scored). Apply the same explicit distinction between native metrics and judge scores when adding benchmarks.
+
 `MemScore` displays accuracy, mean search milliseconds, and average context tokens. It is a three-part summary. Lower token use only helps if the remaining evidence supports good answers.
 
 The [retrieval evaluator](../../src/orchestrator/phases/retrieval-eval.ts) judges relevance within up to ten returned records. It does not measure recall against all annotated source evidence. Its NDCG uses relevance found within the returned set. Older reports contain `recallAtK` and `f1AtK`; do not present those as corpus recall. See [report aggregation](../../src/orchestrator/phases/report.ts) for denominators and latency calculations.
