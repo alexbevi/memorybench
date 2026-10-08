@@ -1,3 +1,4 @@
+import { locomoAnswerF1, ANSWER_F1_VERSION } from "../../benchmarks/locomo/scoring"
 import type { Judge } from "../../types/judge"
 import type { Benchmark } from "../../types/benchmark"
 import type { RunCheckpoint } from "../../types/checkpoint"
@@ -79,6 +80,11 @@ export async function runEvaluatePhase(
           label: result.label,
           explanation: result.explanation,
           retrievalMetrics,
+          answerF1:
+            benchmark.name === "locomo"
+              ? locomoAnswerF1(hypothesis!, question.groundTruth, question.questionType)
+              : undefined,
+          answerF1Version: benchmark.name === "locomo" ? ANSWER_F1_VERSION : undefined,
           completedAt: new Date().toISOString(),
           durationMs,
         })

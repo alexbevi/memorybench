@@ -400,6 +400,17 @@ export default function CompareDetailPage() {
               </p>
             ))}
           </div>
+          <div className="text-sm text-text-secondary mb-4">
+            {report.reports.map(
+              ({ provider, report: result }) =>
+                result.answerF1 && (
+                  <p key={provider}>
+                    {provider}: answer token F1 {(result.answerF1.mean * 100).toFixed(1)}% over{" "}
+                    {result.answerF1.count} answerable questions. Method: {result.answerF1.version}.
+                  </p>
+                )
+            )}
+          </div>
           {/* Accuracy and Latency side by side */}
           <div className="flex gap-6">
             {/* Overall Accuracy - 35% width */}

@@ -67,6 +67,8 @@ export interface AnswerPhaseCheckpoint {
 }
 
 export interface EvaluatePhaseCheckpoint {
+  answerF1?: number
+  answerF1Version?: string
   status: PhaseStatus
   label?: "correct" | "incorrect"
   score?: number

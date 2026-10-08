@@ -123,6 +123,8 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
       label: evalPhase.label || "incorrect",
       explanation: evalPhase.explanation || "",
       hypothesis: answerPhase.hypothesis || "",
+      answerF1: evalPhase.answerF1,
+      answerF1Version: evalPhase.answerF1Version,
       groundTruth: question.groundTruth,
       searchResults: searchPhase.results || [],
       searchDurationMs,
@@ -241,7 +243,15 @@ export function generateReport(benchmark: Benchmark, checkpoint: RunCheckpoint):
     memscore = `${qualityPct}% / ${avgLatency}ms / ${tokenMetrics.avgContextTokens}tok`
   }
 
+  const f1Evaluations = evaluations.filter((e) => e.answerF1 !== undefined)
   const result: BenchmarkResult = {
+    answerF1: f1Evaluations.length
+      ? {
+          mean: f1Evaluations.reduce((sum, e) => sum + e.answerF1!, 0) / f1Evaluations.length,
+          count: f1Evaluations.length,
+          version: f1Evaluations[0].answerF1Version!,
+        }
+      : undefined,
     provider: checkpoint.provider,
     benchmark: checkpoint.benchmark,
     runId: checkpoint.runId,
@@ -298,6 +308,10 @@ export function printReport(result: BenchmarkResult): void {
   console.log("MEMORYBENCH RESULTS")
   console.log("=".repeat(60))
   console.log(`Provider: ${result.provider}`)
+  if (result.answerF1)
+    console.log(
+      `Answer F1 (${result.answerF1.version}, ${result.answerF1.count} answerable questions): ${(100 * result.answerF1.mean).toFixed(1)}%`
+    )
   console.log(`Benchmark: ${result.benchmark}`)
   console.log(
     `Readiness: ${result.readinessPolicy?.method ?? "unrecorded"}. Extraction completion confirmed: ${result.readinessPolicy?.extractionCompletionConfirmed ?? false}`

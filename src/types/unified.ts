@@ -50,6 +50,8 @@ export interface RetrievalAggregates {
 }
 
 export interface EvaluationResult {
+  answerF1?: number
+  answerF1Version?: string
   questionId: string
   questionType: string
   question: string
@@ -98,6 +100,7 @@ export interface TokenMetrics {
 }
 
 export interface BenchmarkResult {
+  answerF1?: { mean: number; count: number; version: string }
   readinessPolicy?: import("./provider").ReadinessPolicy
   provider: string
   benchmark: string
