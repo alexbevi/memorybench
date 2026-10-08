@@ -1,10 +1,11 @@
+import { cancellationCapabilities, stopLocalRun } from "../stop"
 import { logger } from "../../utils/logger"
 import { existsSync, readFileSync, readdirSync } from "fs"
 import { join } from "path"
 import { CheckpointManager } from "../../orchestrator/checkpoint"
 import { orchestrator } from "../../orchestrator"
 import { wsManager } from "../index"
-import { activeRuns, startRun, endRun, requestStop, isRunActive, getRunState } from "../runState"
+import { activeRuns, startRun, endRun, isRunActive, getRunState } from "../runState"
 import { createBenchmark } from "../../benchmarks"
 import type { ProviderName } from "../../types/provider"
 import type { BenchmarkName } from "../../types/benchmark"
@@ -85,6 +86,7 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
     const summary = checkpointManager.getSummary(checkpoint)
     return json({
       ...checkpoint,
+      cancellationCapabilities,
       status: getRunStatus(checkpoint, summary),
       summary,
     })
@@ -301,11 +303,15 @@ export async function handleRunsRoutes(req: Request, url: URL): Promise<Response
   const stopMatch = pathname.match(/^\/api\/runs\/([^/]+)\/stop$/)
   if (method === "POST" && stopMatch) {
     const runId = decodeURIComponent(stopMatch[1])
-    if (!isRunActive(runId)) {
-      return json({ error: "Run is not active" }, 404)
+    let input: unknown
+    try {
+      const body = await req.text()
+      input = body.trim() ? JSON.parse(body) : {}
+    } catch {
+      return json({ error: "Invalid stop request JSON" }, 400)
     }
-    requestStop(runId)
-    return json({ message: "Stop requested", runId })
+    const result = stopLocalRun(runId, input)
+    return json(result.body, result.status)
   }
 
   // DELETE /api/runs/:runId - Delete run

@@ -262,7 +262,7 @@ export default function RunDetailPage() {
                   (terminating || isStopping) && "opacity-50 cursor-not-allowed"
                 )}
               >
-                {terminating || isStopping ? "Stopping..." : "Terminate"}
+                {terminating || isStopping ? "Stopping local work..." : "Stop local work"}
               </button>
             )}
             {canContinue && (
@@ -297,6 +297,12 @@ export default function RunDetailPage() {
           </div>
         </div>
       </div>
+
+      <p className="mb-4 text-sm text-text-secondary">
+        Stopping ends local benchmark work at the next stop check. In-flight requests may finish.
+        Accepted extraction jobs can continue on the provider; remote cancellation is not supported
+        by the current adapters. Deleting this run also leaves remote work and memories intact.
+      </p>
 
       {/* Error Display */}
       {runError && (

@@ -145,7 +145,10 @@ export async function deleteRun(runId: string): Promise<void> {
 }
 
 export async function stopRun(runId: string): Promise<{ message: string }> {
-  return fetchApi(`/api/runs/${encodeURIComponent(runId)}/stop`, { method: "POST" })
+  return fetchApi(`/api/runs/${encodeURIComponent(runId)}/stop`, {
+    method: "POST",
+    body: JSON.stringify({ scope: "local" }),
+  })
 }
 
 export type PhaseId = "ingest" | "indexing" | "search" | "answer" | "evaluate" | "report"
