@@ -1,5 +1,6 @@
 # Standalone Mem0 REST API, PostgreSQL/pgvector, and Neo4j.
 # Requires Docker Compose 2.17+ and the checked-in server config/instructions.
+# Prefer ./compose.sh up -d --build to load this directory's .env consistently.
 # Start: OPENAI_API_KEY='sk-your-key' docker compose up -d --build
 # Custom endpoint:
 # OPENAI_BASE_URL='https://gateway.example.com/v1' OPENAI_API_KEY='gateway-key' \

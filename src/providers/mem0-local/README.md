@@ -7,10 +7,13 @@ prevents local and cloud configurations from sharing a leaderboard label.
 
 ## Start the service
 
-From the repository root, with the model endpoint credentials in your environment:
+Create `self-hosted/mem0/.env` from the checked-in
+[Grove example](../../../self-hosted/mem0/grove.env.example) and set your gateway key.
+Keep this service configuration separate from the repository root `.env` used by
+MemoryBench. From the repository root:
 
 ```sh
-docker compose -f self-hosted/mem0/docker-compose.yml up -d --build
+self-hosted/mem0/compose.sh up -d --build
 ```
 
 The API defaults to `http://localhost:8888`. PostgreSQL, history, and Neo4j data
@@ -35,13 +38,14 @@ Record the alias and its actual deployed model version with benchmark results.
 
 ## Grove with Voyage embeddings
 
-Grove's Voyage API uses a separate URL and `x-api-key` header. It is independent
-of the Foundry extraction URL and its `api-key` header. Configure these values in
-your local `.env`, keeping real credentials out of Git:
+Grove's OpenAI and Voyage routes both accept `x-api-key` at
+`ai-gateway.corp.mongodb.com`. Configure these values in
+`self-hosted/mem0/.env`, keeping real credentials out of Git:
 
 ```dotenv
-# Extraction keeps its own OPENAI_BASE_URL and OPENAI_API_KEY.
-MEM0_MODEL_API_KEY_HEADER=api-key
+# OPENAI_API_KEY contains your Grove key.
+OPENAI_BASE_URL=https://ai-gateway.corp.mongodb.com/openai/v1
+MEM0_MODEL_API_KEY_HEADER=x-api-key
 MEM0_EXTRACTION_MODEL=gpt-4.1-nano
 
 MEM0_EMBEDDING_BASE_URL=https://ai-gateway.corp.mongodb.com/voyage/v1
@@ -66,9 +70,17 @@ gateway's custom header. Set `MEM0_EMBEDDING_API_KEY_HEADER` for that endpoint.
 Recreate the API container after changing environment settings:
 
 ```sh
-docker compose -f self-hosted/mem0/docker-compose.yml up -d --no-deps mem0
+self-hosted/mem0/compose.sh up -d --no-deps mem0
 bun run src/providers/mem0-local/validate.ts
 ```
+
+The wrapper explicitly loads the service `.env` regardless of the working
+directory. Running Compose from `self-hosted/mem0` without those settings previously
+recreated the service with blank gateway headers and default OpenAI embeddings.
+The API stayed healthy but ingestion failed. Exported shell variables still
+override `.env` values; unset stale overrides before recreating the container.
+The older `grove-gateway-prod.azure-api.net` Foundry route uses `api-key` instead.
+Keep its header paired with that route if you explicitly choose it.
 
 The `voyage` format sends native Voyage fields: `model`, `input`, `input_type`,
 and `output_dimension`. Search calls use `input_type: query`; other embedding
@@ -211,7 +223,7 @@ request. Keep secrets and transcript contents out of shared diagnostics.
 ```sh
 bun test src/providers/mem0-local/provider.test.ts src/providers/mem0/input-parity.test.ts
 python3 -B self-hosted/mem0/server_config_test.py
-docker compose -f self-hosted/mem0/docker-compose.yml config --quiet
+self-hosted/mem0/compose.sh config --quiet
 bun x tsc --noEmit
 ```
 
