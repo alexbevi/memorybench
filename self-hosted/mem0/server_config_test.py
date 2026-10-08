@@ -12,6 +12,24 @@ spec.loader.exec_module(server_config)
 
 
 class ServerConfigTest(unittest.TestCase):
+    def setUp(self):
+        environment = patch.dict(os.environ, {
+            "MEM0_EXTRACTION_MODEL": "", "MEM0_GRAPH_ENABLED": "false",
+            "MEM0_MODEL_API_KEY_HEADER": "",
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def test_extraction_model_alias_is_optional_and_leaves_embeddings_unchanged(self):
+        defaults = {"llm": {"config": {"model": "pinned"}}, "embedder": {"model": "embedding"}}
+        with patch.dict(os.environ, {"MEM0_EXTRACTION_MODEL": "alias", "MEM0_GRAPH_ENABLED": "false"}), patch.object(
+            Path, "read_text", return_value='"instructions"'
+        ):
+            configured = server_config.configure(defaults)
+        self.assertEqual(configured["llm"]["config"]["model"], "alias")
+        self.assertEqual(configured["embedder"], defaults["embedder"])
+        self.assertEqual(defaults["llm"]["config"]["model"], "pinned")
+
     def test_gateway_header_reaches_vector_and_graph_model_clients(self):
         calls = []
 

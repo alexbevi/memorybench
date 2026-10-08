@@ -14,6 +14,9 @@ def configure(defaults):
         raise ValueError("MEM0_GRAPH_ENABLED must be true or false")
     if graph == "false":
         config.pop("graph_store", None)
+    model = os.environ.get("MEM0_EXTRACTION_MODEL", "").strip()
+    if model:
+        config["llm"]["config"]["model"] = model
 
     instructions = json.loads(Path("/app/extraction-instructions.json").read_text())
     if not isinstance(instructions, str) or not instructions.strip():

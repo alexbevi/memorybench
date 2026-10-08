@@ -10,6 +10,7 @@
 # Models: gpt-4.1-nano-2025-04-14 and text-embedding-3-small.
 # Gateways requiring a key header: set MEM0_MODEL_API_KEY_HEADER=api-key.
 # Its value comes from OPENAI_API_KEY; the normal bearer header remains present.
+# MEM0_EXTRACTION_MODEL can override the extraction model with a gateway alias.
 # Mem0 v1.0.11 is pinned to preserve the guide's three-service architecture.
 # Graph extraction defaults off for parity with the cloud adapter.
 # Set MEM0_GRAPH_ENABLED=true to measure graph-enabled ingestion separately.
@@ -70,6 +71,7 @@ services:
       # Apply changes with docker compose up -d; restart alone keeps old env vars.
       OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
       MEM0_MODEL_API_KEY_HEADER: "${MEM0_MODEL_API_KEY_HEADER:-}"
+      MEM0_EXTRACTION_MODEL: "${MEM0_EXTRACTION_MODEL:-}"
       ADMIN_API_KEY: "${MEM0_API_KEY:-}"
       MEM0_TELEMETRY: "false"
       MEM0_GRAPH_ENABLED: "${MEM0_GRAPH_ENABLED:-false}"

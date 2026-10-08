@@ -28,6 +28,11 @@ embedding clients, including graph clients when enabled. Normal bearer
 authentication remains present. Leave this setting empty for direct OpenAI use.
 `MEM0_LOCAL_API_KEY` controls authentication to mem0 and does not supply this header.
 
+If the gateway expects a deployment alias instead of the pinned extraction model
+name, set `MEM0_EXTRACTION_MODEL`, for example `gpt-4.1-nano`. An empty value retains
+the pinned default. This does not change the embedding model or vector dimensions.
+Record the alias and its actual deployed model version with benchmark results.
+
 ## Connect MemoryBench
 
 ```sh
