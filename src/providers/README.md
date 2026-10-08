@@ -53,7 +53,8 @@ Example: See `src/providers/zep/prompts.ts`
 | Provider | SDK | Notes |
 |----------|-----|-------|
 | `supermemory` | `supermemory` | Raw JSON sessions |
-| `mem0` | `mem0ai` | v2 API with graph |
+| `mem0` | `mem0ai` | Cloud v2 API, graph disabled |
+| `mem0-local` | REST via `fetch` | [Standalone server setup and validation](mem0-local/README.md), graph disabled by default |
 | `zep` | `@getzep/zep-cloud` | Graph-based, custom prompts |
 
 Benchmark answering uses `src/prompts/answer.ts` for every provider. Provider

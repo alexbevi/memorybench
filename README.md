@@ -55,6 +55,10 @@ ANTHROPIC_API_KEY=
 GOOGLE_API_KEY=
 ```
 
+For standalone mem0, use provider `mem0-local` with `MEM0_LOCAL_BASE_URL`
+and optional `MEM0_LOCAL_API_KEY`. See the
+[local mem0 setup and validation guide](src/providers/mem0-local/README.md).
+
 ## Commands
 
 | Command | Description |

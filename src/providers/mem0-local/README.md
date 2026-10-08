@@ -1,0 +1,129 @@
+# Standalone mem0 provider
+
+`mem0-local` connects MemoryBench to the REST server in
+[self-hosted/mem0/docker-compose.yml](../../../self-hosted/mem0/docker-compose.yml).
+The existing `mem0` provider continues to use mem0 Cloud. Keeping separate IDs
+prevents local and cloud configurations from sharing a leaderboard label.
+
+## Start the service
+
+From the repository root, with the model endpoint credentials in your environment:
+
+```sh
+docker compose -f self-hosted/mem0/docker-compose.yml up -d --build
+```
+
+The API defaults to `http://localhost:8888`. PostgreSQL, history, and Neo4j data
+remain in named volumes across recreation. The Compose file mounts the checked-in
+startup module and shared extraction instructions, so retain the repository layout.
+
+`OPENAI_API_KEY` and `OPENAI_BASE_URL` configure the server's extraction and
+embedding clients. The endpoint must accept OpenAI-style bearer authentication,
+chat completions with JSON output, and embeddings. Changing the endpoint does not
+change the configured model names. A gateway requiring an additional subscription
+header needs separate server-side support; `MEM0_LOCAL_API_KEY` does not supply it.
+
+## Connect MemoryBench
+
+```sh
+export MEM0_LOCAL_BASE_URL=http://localhost:8888
+# Only if the server was started with MEM0_API_KEY:
+# export MEM0_LOCAL_API_KEY=<the same server API key>
+
+bun run src/providers/mem0-local/validate.ts
+```
+
+The optional server API key travels in `X-API-Key`. It is separate from the
+server's model credentials and from MemoryBench's answering/judge credentials.
+An unset local API key is supported when server authentication is disabled.
+The adapter does not reuse `MEM0_API_KEY`, which may be a cloud credential.
+
+The validation command writes three short synthetic sessions into two random
+namespaces. It checks cross-session retrieval, a new adapter instance, namespace
+isolation, and scoped deletion. It calls the server's extraction and embedding
+models and clears its own namespaces afterward. A healthy `/openapi.json` endpoint
+alone does not establish that model authentication or extraction works.
+
+Then start a fresh benchmark run:
+
+```sh
+bun run src/index.ts run -p mem0-local -b locomo -l 1 \
+  -m gpt-5 -j gpt-5-mini -r mem0-local-locomo-smoke-01
+
+bun run src/index.ts compare -p atlas-agent-engine,mem0,mem0-local \
+  -b locomo -s 2 -m gpt-5 -j gpt-5-mini \
+  --compare-id locomo-local-cloud-01
+```
+
+The compare command creates a shared question selection. These small
+samples diagnose integration behavior; broaden conversation coverage before making
+provider claims. Restart the MemoryBench UI server to discover the new provider.
+
+## Configuration and comparison policy
+
+The Compose startup defaults graph extraction off, matching the cloud adapter's
+`enable_graph: false`. Set `MEM0_GRAPH_ENABLED=true` before recreating the API
+container to enable graph extraction. Neo4j data remains intact either way.
+The adapter returns vector-memory `results` only. It excludes graph `relations`;
+graph-enabled ingestion therefore adds work without feeding those relations to
+the answering model. Label that configuration explicitly in comparisons.
+
+Cloud and local extraction share
+[extraction-instructions.json](../mem0/extraction-instructions.json).
+Local startup appends the `facts` JSON contract required by the pinned OSS library.
+This aligns instructions, not the providers' complete extraction implementations.
+The standalone request's `prompt` field does not control ordinary fact extraction
+in this version. The adapter never calls `/configure` or updates shared settings.
+
+The pinned server uses mem0ai 1.0.11, extraction model
+`gpt-4.1-nano-2025-04-14`, and embedding model `text-embedding-3-small`.
+Record the deployed image, model gateway and model mappings, graph mode, instruction
+revision, and any server-side overrides with results. Repository defaults do not
+prove the configuration of an arbitrary remote endpoint.
+
+The adapter preserves the common source headers, uses `containerTag` as `user_id`
+on every operation, and defaults to concurrency two. Search uses the requested
+limit, with a default of ten. Answering still uses the common evidence budget and
+model policy. See the [comparison guide](../../../docs/benchmarks/README.md).
+
+## Completion and failure behavior
+
+Ingestion waits for the standalone memory operation. Returned IDs acknowledge
+memory operations, not cloud jobs. The indexing hook makes no event-status calls,
+and readiness records `synchronous-response` with
+`extractionCompletionConfirmed: false`. The pinned library can catch extraction
+or update errors internally, so an HTTP success or empty result cannot prove
+successful extraction. Empty operation arrays produce a warning and remain valid
+for sessions without new facts.
+
+Extraction time appears in ingestion duration. Compare ingestion plus indexing
+when discussing availability with a cloud provider. Search latency remains a
+separate measurement.
+
+Requests have a five-minute timeout and no automatic retries. A timeout or lost
+write response can leave remote changes despite a failed local phase. Inspect the
+namespace before resuming; the API supplies no idempotency key. Completed sessions
+are checkpointed normally, but an uncertain session can be submitted again on
+resume. Use fresh run IDs after changing extraction settings or the endpoint.
+
+Malformed JSON, unexpected response shapes, and non-success HTTP statuses fail
+explicitly. Error messages omit server bodies because they can contain source
+text or credentials. `clear()` deletes only the supplied `user_id`; it never calls
+the global reset route.
+
+If the API returns HTTP 500, inspect server logs locally. An upstream HTTP 401 is
+a model/gateway credential problem even when the mem0 API itself accepts the
+request. Keep secrets and transcript contents out of shared diagnostics.
+
+## Offline checks
+
+```sh
+bun test src/providers/mem0-local/provider.test.ts src/providers/mem0/input-parity.test.ts
+python3 -B self-hosted/mem0/server_config_test.py
+docker compose -f self-hosted/mem0/docker-compose.yml config --quiet
+bun x tsc --noEmit
+```
+
+The provider tests cover the REST lifecycle, headers, source formatting, namespace
+scope, operation parsing, malformed responses, and timeout behavior. The Python
+tests verify startup settings without requiring Docker or model credentials.

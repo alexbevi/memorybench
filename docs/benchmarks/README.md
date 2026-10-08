@@ -43,6 +43,7 @@ These descriptions concern the adapters in this repository as inspected on Octob
 | `atlas-agent-engine` | Records conversation turns, then searches semantic and episodic memories | Atlas Memory Service with service-side extraction |
 | `atlas-agent-engine-direct` | Saves transcript chunks as episodes and searches episodic memory | Atlas transcript retrieval baseline; helps investigate what extraction preserves or loses |
 | `mem0` | Uses the v2 ingestion API, custom extraction instructions, asynchronous writes, and memory search; graph is disabled | mem0 extracted-memory comparison |
+| `mem0-local` | Uses the standalone REST server, synchronous ingestion, shared extraction instructions, and vector-memory search; the checked-in server defaults graph off | Local mem0 configuration, tracked separately from cloud; [setup and limitations](../../src/providers/mem0-local/README.md) |
 | `supermemory` | Ingests sessions and uses hybrid memory search with source chunks requested | Memory retrieval with source evidence |
 | `zep` | Searches graph edges and nodes with cross-encoder reranking | Graph retrieval configuration; custom grading needs separate treatment |
 | `rag` | Extracts memories with an LLM, chunks and embeds them, then combines BM25 and vector retrieval | Local hybrid retrieval baseline that also includes extraction |
