@@ -311,7 +311,7 @@ export default function RunDetailPage() {
       )}
 
       {/* Phase Progress */}
-      <PhaseProgress summary={run.summary} />
+      <PhaseProgress summary={run.summary} questions={run.questions} isRunning={isRunning} />
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border mt-8 mb-6">

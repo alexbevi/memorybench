@@ -27,6 +27,7 @@ export interface RunSummary {
 
 export interface QuestionCheckpoint {
   questionId: string
+  sessions?: { sessionId: string; date?: string; messageCount: number }[]
   containerTag: string
   question: string
   groundTruth: string

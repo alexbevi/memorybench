@@ -3,8 +3,12 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Tooltip } from "@/components/tooltip"
+import type { QuestionCheckpoint } from "@/lib/api"
+import { getIngestionProgress } from "@/lib/ingestion-progress"
 
 interface PhaseProgressProps {
+  questions?: Record<string, QuestionCheckpoint>
+  isRunning?: boolean
   summary: {
     total: number
     ingested: number
@@ -28,10 +32,11 @@ const phases = [
   { key: "evaluated", label: "Evaluate" },
 ] as const
 
-export function PhaseProgress({ summary }: PhaseProgressProps) {
+export function PhaseProgress({ summary, questions, isRunning = false }: PhaseProgressProps) {
   const [lockedEpisodes, setLockedEpisodes] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
   const [justClicked, setJustClicked] = useState(false)
+  const ingestion = questions ? getIngestionProgress(questions, summary.total) : undefined
 
   return (
     <div className="card">
@@ -61,10 +66,21 @@ export function PhaseProgress({ summary }: PhaseProgressProps) {
       <div className="flex items-center gap-2">
         {phases.map((phase) => {
           const count = summary[phase.key]
-          const progress = (count / summary.total) * 100
-          const isComplete = count === summary.total
-          const isInProgress = count > 0 && count < summary.total
-          const isPending = count === 0
+          const progress =
+            phase.key === "ingested" && ingestion
+              ? ingestion.percent
+              : summary.total > 0
+                ? (count / summary.total) * 100
+                : 0
+          const isComplete = summary.total > 0 && count === summary.total
+          const isInProgress = progress > 0 && !isComplete
+          const isPending = progress === 0
+          const waitingForFirstSession =
+            phase.key === "ingested" &&
+            isRunning &&
+            ingestion &&
+            ingestion.active.length > 0 &&
+            progress === 0
 
           const episodes = summary.indexingEpisodes
           const canToggleEpisodes =
@@ -140,15 +156,40 @@ export function PhaseProgress({ summary }: PhaseProgressProps) {
                     "h-full transition-all duration-500",
                     isComplete && "bg-status-success",
                     isInProgress && "bg-accent",
-                    isPending && "bg-transparent"
+                    isPending && !waitingForFirstSession && "bg-transparent",
+                    waitingForFirstSession && "shimmer-bar"
                   )}
-                  style={{ width: `${progress}%` }}
+                  style={{ width: waitingForFirstSession ? "100%" : `${progress}%` }}
+                  role="progressbar"
+                  aria-label={`${phase.label} progress`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={waitingForFirstSession ? undefined : progress}
                 />
               </div>
             </div>
           )
         })}
       </div>
+      {ingestion && (ingestion.savedSessions > 0 || ingestion.active.length > 0) && (
+        <div className="mt-3 text-xs text-text-secondary" aria-live="polite">
+          <p>
+            {ingestion.savedSessions} sessions saved · {summary.ingested}/{summary.total} questions
+            fully ingested
+          </p>
+          {isRunning && ingestion.active.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+              {ingestion.active.map((question) => (
+                <li key={question.questionId}>
+                  <span className="font-mono">{question.questionId}</span>: {question.completed}
+                  {question.total !== undefined ? `/${question.total}` : ""} sessions
+                  {question.completed === 0 && " · processing first session"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }
