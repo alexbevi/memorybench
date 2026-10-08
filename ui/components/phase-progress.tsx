@@ -90,7 +90,7 @@ export function PhaseProgress({ summary, questions, isRunning = false }: PhasePr
           const isShowingEpisodes =
             canToggleEpisodes && (shouldPreview ? !lockedEpisodes : lockedEpisodes)
 
-          const displayLabel = isShowingEpisodes ? "Episodes Indexed" : phase.label
+          const displayLabel = isShowingEpisodes ? "Receipts ready" : phase.label
           const displayCount = isShowingEpisodes ? episodes.completed : count
           const displayTotal = isShowingEpisodes ? episodes.total : summary.total
           const displayProgress = isShowingEpisodes
@@ -171,6 +171,13 @@ export function PhaseProgress({ summary, questions, isRunning = false }: PhasePr
           )
         })}
       </div>
+      {summary.indexingEpisodes && summary.indexingEpisodes.total > 0 && (
+        <p className="mt-3 text-xs text-text-secondary" aria-live="polite">
+          Readiness: {summary.indexingEpisodes.completed}/{summary.indexingEpisodes.total} receipts
+          confirmed ready · {summary.indexed}/{summary.total} questions ready
+          {summary.ingested < summary.total && " · checks begin after ingestion finishes"}
+        </p>
+      )}
       {ingestion && (ingestion.savedSessions > 0 || ingestion.active.length > 0) && (
         <div className="mt-3 text-xs text-text-secondary" aria-live="polite">
           <p>
