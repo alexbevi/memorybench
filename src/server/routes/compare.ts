@@ -146,7 +146,16 @@ export async function handleCompareRoutes(req: Request, url: URL): Promise<Respo
   if (method === "POST" && pathname === "/api/compare/start") {
     try {
       const body = await req.json()
-      const { providers, benchmark, judgeModel, answeringModel, sampling, force } = body
+      const {
+        providers,
+        benchmark,
+        judgeModel,
+        answeringModel,
+        sampling,
+        force,
+        concurrency,
+        execution,
+      } = body
 
       if (!providers || !Array.isArray(providers) || providers.length === 0) {
         return json({ error: "Missing or invalid providers array" }, 400)
@@ -165,6 +174,8 @@ export async function handleCompareRoutes(req: Request, url: URL): Promise<Respo
         judgeModel,
         answeringModel,
         sampling,
+        concurrency,
+        execution,
         force,
       })
 
@@ -261,6 +272,8 @@ export async function handleCompareRoutes(req: Request, url: URL): Promise<Respo
 
     // Return aggregated data
     return json({
+      concurrency: manifest.concurrency,
+      execution: manifest.execution,
       compareId: manifest.compareId,
       benchmark: manifest.benchmark,
       judge: manifest.judge,
@@ -387,6 +400,8 @@ async function initializeComparison(options: {
   judgeModel: string
   answeringModel: string
   sampling?: SamplingConfig
+  concurrency?: number
+  execution?: "sequential" | "parallel"
   force?: boolean
 }): Promise<{ compareId: string }> {
   // Only await manifest creation - this is fast

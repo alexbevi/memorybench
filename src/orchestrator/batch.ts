@@ -1,3 +1,8 @@
+import {
+  comparisonExecutionOptions,
+  executeComparisonTasks,
+  type ComparisonExecution,
+} from "./comparison-execution"
 import { selectQuestionsBySampling, DEFAULT_SAMPLE_SEED } from "./sampling"
 import type { ProviderName } from "../types/provider"
 import type { BenchmarkName } from "../types/benchmark"
@@ -22,6 +27,8 @@ export interface CompareManifest {
   benchmark: string
   judge: string
   answeringModel: string
+  concurrency?: number
+  execution?: ComparisonExecution
   sampling?: SamplingConfig
   targetQuestionIds: string[]
   runs: Array<{
@@ -35,6 +42,8 @@ export interface CompareOptions {
   benchmark: BenchmarkName
   judgeModel: string
   answeringModel: string
+  concurrency?: number
+  execution?: ComparisonExecution
   sampling?: SamplingConfig
   force?: boolean
 }
@@ -126,6 +135,7 @@ export class BatchManager {
             seed: options.sampling.seed ?? DEFAULT_SAMPLE_SEED,
           } as SamplingConfig)
         : options.sampling
+    const executionOptions = comparisonExecutionOptions(options.concurrency, options.execution)
     const compareId = generateCompareId()
 
     logger.info(`Loading benchmark: ${benchmark}`)
@@ -149,6 +159,7 @@ export class BatchManager {
       answeringModel,
       sampling,
       targetQuestionIds,
+      ...executionOptions,
       runs: providers.map((provider) => ({
         provider,
         runId: `${compareId}-${provider}`,
@@ -179,15 +190,15 @@ export class BatchManager {
   }
 
   async executeRuns(manifest: CompareManifest): Promise<CompareResult> {
-    logger.info(`Starting ${manifest.runs.length} parallel runs...`)
+    logger.info(`Starting ${manifest.runs.length} ${manifest.execution ?? "parallel"} runs...`)
 
     // Register all runs in activeRuns before starting
     for (const run of manifest.runs) {
       startRun(run.runId, manifest.benchmark)
     }
 
-    const results = await Promise.allSettled(
-      manifest.runs.map(async (run) => {
+    const results = await executeComparisonTasks(
+      manifest.runs.map((run) => async () => {
         try {
           return await orchestrator.run({
             provider: run.provider as ProviderName,
@@ -196,6 +207,8 @@ export class BatchManager {
             runId: run.runId,
             answeringModel: manifest.answeringModel,
             questionIds: manifest.targetQuestionIds,
+            concurrency:
+              manifest.concurrency === undefined ? undefined : { default: manifest.concurrency },
           })
         } catch (error) {
           // Update checkpoint status to persist the failure state
@@ -208,7 +221,8 @@ export class BatchManager {
           // Always unregister the run when done (success or failure)
           endRun(run.runId)
         }
-      })
+      }),
+      manifest.execution ?? "parallel"
     )
 
     const failures = results.filter((r) => r.status === "rejected")

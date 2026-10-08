@@ -34,6 +34,8 @@ export default function NewComparePage() {
     selectionMode: "full" as SelectionMode,
     sampleType: "stratified" as SampleType,
     seed: "memorybench-v1",
+    concurrency: "2",
+    execution: "sequential" as "sequential" | "parallel",
     perCategory: "20",
     limit: "",
   })
@@ -122,6 +124,8 @@ export default function NewComparePage() {
         judgeModel: form.judgeModel,
         answeringModel: form.answeringModel,
         sampling,
+        concurrency: Number(form.concurrency),
+        execution: form.execution,
       })
 
       router.push(`/compare`)
@@ -362,6 +366,37 @@ export default function NewComparePage() {
           )}
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm text-text-secondary">
+            Concurrency per provider
+            <input
+              type="number"
+              min="1"
+              step="1"
+              required
+              className="input mt-1"
+              value={form.concurrency}
+              onChange={(e) => setForm({ ...form, concurrency: e.target.value })}
+            />
+          </label>
+          <label className="text-sm text-text-secondary">
+            Provider execution
+            <select
+              className="input mt-1"
+              value={form.execution}
+              onChange={(e) =>
+                setForm({ ...form, execution: e.target.value as "sequential" | "parallel" })
+              }
+            >
+              <option value="sequential">Sequential</option>
+              <option value="parallel">Parallel</option>
+            </select>
+          </label>
+          <p className="col-span-2 text-sm text-text-secondary">
+            Sequential runs avoid competition between these providers. Keep unrelated benchmark runs
+            stopped when measuring latency.
+          </p>
+        </div>
         {error && (
           <div className="p-3 bg-status-error/10 border border-status-error/20 rounded text-status-error text-sm">
             {error}

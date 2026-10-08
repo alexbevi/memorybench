@@ -16,6 +16,8 @@ interface CompareArgs {
   answeringModel: string
   compareId?: string
   sample?: number
+  concurrency?: number
+  execution?: "sequential" | "parallel"
   seed?: string
   sampleType?: SampleType
   limit?: number
@@ -53,6 +55,12 @@ export function parseCompareArgs(args: string[]): CompareArgs | null {
       }
     } else if (arg === "-l" || arg === "--limit") {
       parsed.limit = parseInt(args[++i], 10)
+    } else if (arg === "--concurrency" || arg === "-c") {
+      parsed.concurrency = Number(args[++i])
+    } else if (arg === "--execution") {
+      const mode = args[++i]
+      if (mode !== "sequential" && mode !== "parallel") return null
+      parsed.execution = mode
     } else if (arg === "--seed") {
       parsed.seed = args[++i]
     } else if (arg === "--force") {
@@ -84,6 +92,8 @@ export async function compareCommand(args: string[]): Promise<void> {
     console.log(`  -b, --benchmark       Benchmark: ${getAvailableBenchmarks().join(", ")}`)
     console.log(`  -j, --judge           Judge model (default: ${DEFAULT_JUDGE_MODEL})`)
     console.log(`  -m, --answering-model Answering model (default: ${DEFAULT_ANSWERING_MODEL})`)
+    console.log("  -c, --concurrency    Shared per-provider concurrency (default: 2)")
+    console.log("  --execution          sequential (default) or parallel provider runs")
     console.log("  --seed               Reproducible sampling seed (default: memorybench-v1)")
     console.log("  -s, --sample          Sample N questions per category")
     console.log("  --sample-type         Sample type: stratified (default), consecutive, random")
@@ -138,6 +148,8 @@ export async function compareCommand(args: string[]): Promise<void> {
       result = await batchManager.compare({
         providers: parsed.providers as ProviderName[],
         benchmark: parsed.benchmark as BenchmarkName,
+        concurrency: parsed.concurrency,
+        execution: parsed.execution,
         judgeModel: parsed.judgeModel,
         answeringModel: parsed.answeringModel,
         sampling,

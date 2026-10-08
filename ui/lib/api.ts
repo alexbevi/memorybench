@@ -386,6 +386,8 @@ export interface CompareSummary {
 }
 
 export interface CompareDetail extends CompareSummary {
+  concurrency?: number
+  execution?: "sequential" | "parallel"
   sampling?: SamplingConfig
   targetQuestionIds?: string[]
   runs: CompareRunInfo[]
@@ -461,6 +463,8 @@ export async function startCompare(params: {
   compareId: string
   judgeModel: string
   answeringModel?: string
+  concurrency?: number
+  execution?: "sequential" | "parallel"
   sampling?: SamplingConfig
 }): Promise<{ message: string; compareId: string }> {
   return fetchApi("/api/compare/start", {
